@@ -25,14 +25,13 @@ enum class Feature {
 
 struct DataLoader {
     //This is the constructor:
-    DataLoader(std::string file_name, size_t _n_tau) :
-    // DataLoader(std::string file_name, size_t _n_tau, size_t start_dataset, size_t end_dataset) :
-        file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(0) { }
+    DataLoader(std::string file_name, size_t _n_tau, Long64_t start_dataset, Long64_t end_dataset) :
+        file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(start_dataset) { }
     
     std::shared_ptr<TFile> file;
     tau_tuple::TauTuple tuple; // tuple is the tree
     size_t n_tau; // number of events/taus
-    Long64_t current_entry; // number of the current entry
+    Long64_t current_entry = start_dataset; // number of the current entry
 
     static const size_t n_pf  = 5; // number of pf candidates per event
     static const size_t n_fe  = 30; // number of featurese per pf candidate
@@ -79,20 +78,23 @@ struct DataLoader {
                     get_x(Feature::pfCand_phi) = 0;
                 }
             }
+            if(current_entry == end_dataset){
+                tau_id = n_tau;
+            }
         }
         return data;
     }
 
     // Calculate the number of batches:
     size_t NumberOfBatches(){
-        size_t n_entries = tuple.GetEntries();
+        size_t n_entries = end_dataset-start_dataset;
         size_t n_batches = n_entries/n_tau;
         return n_batches;
     }
 
     // Resets the current entry to zero so that we can loop on epochs:
     void Reset() {
-        current_entry = 0; 
+        current_entry = start_dataset; 
     }
 
     // This function calculates the corresponding index in a 1D array: 
