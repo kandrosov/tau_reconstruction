@@ -25,12 +25,14 @@ enum class Feature {
 
 struct DataLoader {
     //This is the constructor:
-    DataLoader(std::string file_name, size_t _n_tau, Long64_t start_dataset, Long64_t end_dataset) :
-        file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(start_dataset) { }
+    DataLoader(std::string file_name, size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
+        file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset){ }
     
     std::shared_ptr<TFile> file;
     tau_tuple::TauTuple tuple; // tuple is the tree
     size_t n_tau; // number of events/taus
+    Long64_t start_dataset;
+    Long64_t end_dataset;
     Long64_t current_entry = start_dataset; // number of the current entry
 
     static const size_t n_pf  = 5; // number of pf candidates per event
@@ -79,7 +81,7 @@ struct DataLoader {
                 }
             }
             if(current_entry == end_dataset){
-                tau_id = n_tau;
+                tau_ind = n_tau;
             }
         }
         return data;
