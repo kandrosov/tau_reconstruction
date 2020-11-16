@@ -17,9 +17,12 @@ struct Data {
 
 // List of features:
 enum class Feature {
-    pfCand_pt = 0,
-    pfCand_eta = 1,
-    pfCand_phi = 2,
+    pfCand_pt     = 0,
+    pfCand_eta    = 1,
+    pfCand_phi    = 2,
+    pfCand_mass   = 3,
+    pfCand_pdgId  = 4,
+    pfCand_charge = 5,
 };
 
 
@@ -30,28 +33,27 @@ struct DataLoader {
     
     std::shared_ptr<TFile> file;
     tau_tuple::TauTuple tuple; // tuple is the tree
-    size_t n_tau; // number of events/taus
+    size_t n_tau; // number of events(=taus)
     Long64_t start_dataset;
     Long64_t end_dataset;
-    Long64_t current_entry = start_dataset; // number of the current entry
+    Long64_t current_entry; // number of the current entry
 
-    static const size_t n_pf  = 5; // number of pf candidates per event
-    static const size_t n_fe  = 30; // number of featurese per pf candidate
+    static const size_t n_pf  = 100; // number of pf candidates per event
+    static const size_t n_fe  = 6; // number of featurese per pf candidate
     static const size_t n_count = 2; // chanrged and neutral particle count
 
-    bool HasNext() {        
-        return current_entry + n_tau < tuple.GetEntries();
+    bool HasNext() {     
+        return (current_entry + n_tau) < end_dataset;
     }
     Data LoadNext(){
-        
         //Create an empty data structure:
         Data data(n_tau * n_pf * n_fe, n_tau * n_count);
 
         for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) { 
             tuple.GetEntry(current_entry); // get the entry of the current event
             const tau_tuple::Tau& tau = tuple();
-            for(size_t pf_ind = 0; pf_ind < n_pf; ++pf_ind) {
-
+            for(size_t pf_ind = 0; pf_ind < n_pf; ++pf_ind) { 
+                
                 auto get_x = [&](Feature fe) -> float& {
                     size_t index = GetIndex_x(tau_ind, pf_ind, fe);
                     return data.x.at(index);
@@ -62,22 +64,29 @@ struct DataLoader {
                     return data.y.at(index);
                 };
 
-                // std::cout << tau_ind << " " << pf_ind << " " << tau.pfCand_pt.at(pf_ind) << " "
-                //           << tau.pfCand_eta.at(pf_ind) <<  " " << tau.pfCand_phi.at(pf_ind) << std::endl;
-
+                auto set_x_0 = [&](Feature fe) -> float& {
+                    size_t index = GetIndex_x(tau_ind, pf_ind, fe);
+                    return data.x.at(index) = 0;
+                };
+                
                 size_t pf_size = tau.pfCand_pt.size(); 
                 if(pf_ind < pf_size){
                     // Fill the data with the features
-                    get_x(Feature::pfCand_pt)  = tau.pfCand_pt.at(pf_ind);
-                    get_x(Feature::pfCand_eta) = tau.pfCand_eta.at(pf_ind);
-                    get_x(Feature::pfCand_phi) = tau.pfCand_phi.at(pf_ind);
-
+                    get_x(Feature::pfCand_pt)     = tau.pfCand_pt.at(pf_ind);
+                    get_x(Feature::pfCand_eta)    = tau.pfCand_eta.at(pf_ind);
+                    get_x(Feature::pfCand_phi)    = tau.pfCand_phi.at(pf_ind);
+                    get_x(Feature::pfCand_mass)   = tau.pfCand_mass.at(pf_ind);
+                    get_x(Feature::pfCand_pdgId)  = tau.pfCand_pdgId.at(pf_ind);
+                    get_x(Feature::pfCand_charge) = tau.pfCand_charge.at(pf_ind);
                     get_y(0) = Count_charged_hadrons_true(tau.lepton_gen_vis_pdg);
                     get_y(1) = Count_neutral_hadrons_true(tau.lepton_gen_vis_pdg);
                 } else{
-                    get_x(Feature::pfCand_pt)  = 0;
-                    get_x(Feature::pfCand_eta) = 0;
-                    get_x(Feature::pfCand_phi) = 0;
+                set_x_0(Feature::pfCand_pt);
+                set_x_0(Feature::pfCand_eta);
+                set_x_0(Feature::pfCand_phi);
+                set_x_0(Feature::pfCand_mass);
+                set_x_0(Feature::pfCand_pdgId);
+                set_x_0(Feature::pfCand_charge);
                 }
             }
             if(current_entry == end_dataset){
@@ -94,7 +103,7 @@ struct DataLoader {
         return n_batches;
     }
 
-    // Resets the current entry to zero so that we can loop on epochs:
+    // Resets the current entry to start_dataset so that we can loop on epochs:
     void Reset() {
         current_entry = start_dataset; 
     }
@@ -109,13 +118,15 @@ struct DataLoader {
         return part_fe_direction + part_pf_direction + part_tau_direction;
     }
 
+    // This function calculates the corresponding index in a 1D array: 
+    // feed a = b.reshape(n_tau,n_count)
     size_t GetIndex_y(size_t tau_ind, size_t count_ind) const {
         size_t part_count_direction = count_ind;
         size_t part_tau_direction   = n_count*tau_ind;
         return part_count_direction + part_tau_direction;
     }
 
-    // Functions that count the true values for the number of charged and neutral hadrons for the event:
+    // Function that counts the true values for the number of charged hadrons for the event:
     size_t Count_charged_hadrons_true(std::vector<int> lepton_gen_vis_pdg){
         size_t cnt_charged_hadrons = 0;
         for(int pdg_id : lepton_gen_vis_pdg) {
@@ -127,6 +138,7 @@ struct DataLoader {
         return cnt_charged_hadrons;
     }
 
+    // Function that counts the true values for the number of neutral hadrons for the event:
     size_t Count_neutral_hadrons_true(std::vector<int> lepton_gen_vis_pdg){
         size_t cnt_neutral_hadrons = 0;
         for(int pdg_id : lepton_gen_vis_pdg) {
