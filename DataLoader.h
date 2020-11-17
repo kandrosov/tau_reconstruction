@@ -11,8 +11,8 @@ std::shared_ptr<TFile> OpenRootFile(const std::string& file_name)
 
 
 struct Data {
-    Data(size_t nx, size_t ny) : x(nx), y(ny) { }
-    std::vector<float> x, y;
+    Data(size_t nx, size_t ny, size_t nz) : x(nx), y(ny), z(nz){ }
+    std::vector<float> x, y, z;
 };
 
 // List of features:
@@ -23,6 +23,7 @@ enum class Feature {
     pfCand_mass   = 3,
     pfCand_pdgId  = 4,
     pfCand_charge = 5,
+    tau_decayMode = 6,
 };
 
 
@@ -47,21 +48,25 @@ struct DataLoader {
     }
     Data LoadNext(){
         //Create an empty data structure:
-        Data data(n_tau * n_pf * n_fe, n_tau * n_count);
+        Data data(n_tau * n_pf * n_fe, n_tau * n_count, n_tau);
 
         for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) { 
             tuple.GetEntry(current_entry); // get the entry of the current event
             const tau_tuple::Tau& tau = tuple();
+
+            data.z.at(tau_ind) = tau.tau_decayMode;
+            auto get_y = [&](size_t count_ind) -> float& {
+                size_t index = GetIndex_y(tau_ind, count_ind);
+                return data.y.at(index);
+            };
+            get_y(0) = Count_charged_hadrons_true(tau.lepton_gen_vis_pdg);
+            get_y(1) = Count_neutral_hadrons_true(tau.lepton_gen_vis_pdg);
+
             for(size_t pf_ind = 0; pf_ind < n_pf; ++pf_ind) { 
                 
                 auto get_x = [&](Feature fe) -> float& {
                     size_t index = GetIndex_x(tau_ind, pf_ind, fe);
                     return data.x.at(index);
-                };
-
-                auto get_y = [&](size_t count_ind) -> float& {
-                    size_t index = GetIndex_y(tau_ind, count_ind);
-                    return data.y.at(index);
                 };
 
                 auto set_x_0 = [&](Feature fe) -> float& {
@@ -78,15 +83,13 @@ struct DataLoader {
                     get_x(Feature::pfCand_mass)   = tau.pfCand_mass.at(pf_ind);
                     get_x(Feature::pfCand_pdgId)  = tau.pfCand_pdgId.at(pf_ind);
                     get_x(Feature::pfCand_charge) = tau.pfCand_charge.at(pf_ind);
-                    get_y(0) = Count_charged_hadrons_true(tau.lepton_gen_vis_pdg);
-                    get_y(1) = Count_neutral_hadrons_true(tau.lepton_gen_vis_pdg);
                 } else{
-                set_x_0(Feature::pfCand_pt);
-                set_x_0(Feature::pfCand_eta);
-                set_x_0(Feature::pfCand_phi);
-                set_x_0(Feature::pfCand_mass);
-                set_x_0(Feature::pfCand_pdgId);
-                set_x_0(Feature::pfCand_charge);
+                    set_x_0(Feature::pfCand_pt);
+                    set_x_0(Feature::pfCand_eta);
+                    set_x_0(Feature::pfCand_phi);
+                    set_x_0(Feature::pfCand_mass);
+                    set_x_0(Feature::pfCand_pdgId);
+                    set_x_0(Feature::pfCand_charge);
                 }
             }
             if(current_entry == end_dataset){
@@ -141,9 +144,16 @@ struct DataLoader {
     // Function that counts the true values for the number of neutral hadrons for the event:
     size_t Count_neutral_hadrons_true(std::vector<int> lepton_gen_vis_pdg){
         size_t cnt_neutral_hadrons = 0;
+        size_t cnt_photons = 0;
         for(int pdg_id : lepton_gen_vis_pdg) {
             pdg_id = std::abs(pdg_id);
-            if(pdg_id == 22 || pdg_id == 310 || pdg_id == 130){
+            if(pdg_id == 22){
+                ++cnt_photons;
+                if(cnt_photons == 2){
+                    ++cnt_neutral_hadrons;
+                    cnt_photons = 0;
+                }
+            }else if(pdg_id == 310 || pdg_id == 130){
                 ++cnt_neutral_hadrons;
             }
         }
