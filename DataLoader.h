@@ -23,7 +23,7 @@ enum class Feature {
     pfCand_mass   = 3,
     pfCand_pdgId  = 4,
     pfCand_charge = 5,
-    tau_decayMode = 6,
+    tau_decayMode = 6, //Not a feature. Used to compare to old method.
 };
 
 
@@ -40,21 +40,21 @@ struct DataLoader {
     Long64_t current_entry; // number of the current entry
 
     static const size_t n_pf  = 100; // number of pf candidates per event
-    static const size_t n_fe  = 6; // number of featurese per pf candidate
+    static const size_t n_fe  = 6;   // number of featurese per pf candidate
     static const size_t n_count = 2; // chanrged and neutral particle count
 
     bool HasNext() {     
         return (current_entry + n_tau) < end_dataset;
     }
     Data LoadNext(){
-        //Create an empty data structure:
-        Data data(n_tau * n_pf * n_fe, n_tau * n_count, n_tau);
+        Data data(n_tau * n_pf * n_fe, n_tau * n_count, n_tau); // Creates an empty data structure
 
         for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) { 
             tuple.GetEntry(current_entry); // get the entry of the current event
-            const tau_tuple::Tau& tau = tuple();
+            const tau_tuple::Tau& tau = tuple(); // tau is out tree
 
-            data.z.at(tau_ind) = tau.tau_decayMode;
+            data.z.at(tau_ind) = tau.tau_decayMode; 
+            // Fill the labels:
             auto get_y = [&](size_t count_ind) -> float& {
                 size_t index = GetIndex_y(tau_ind, count_ind);
                 return data.y.at(index);
@@ -76,7 +76,7 @@ struct DataLoader {
                 
                 size_t pf_size = tau.pfCand_pt.size(); 
                 if(pf_ind < pf_size){
-                    // Fill the data with the features
+                    // Fill the data with the features:
                     get_x(Feature::pfCand_pt)     = tau.pfCand_pt.at(pf_ind);
                     get_x(Feature::pfCand_eta)    = tau.pfCand_eta.at(pf_ind);
                     get_x(Feature::pfCand_phi)    = tau.pfCand_phi.at(pf_ind);
@@ -147,6 +147,7 @@ struct DataLoader {
         size_t cnt_photons = 0;
         for(int pdg_id : lepton_gen_vis_pdg) {
             pdg_id = std::abs(pdg_id);
+            // 2 photons = 1 pi0:
             if(pdg_id == 22){
                 ++cnt_photons;
                 if(cnt_photons == 2){

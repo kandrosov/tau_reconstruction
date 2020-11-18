@@ -2,7 +2,10 @@ import ROOT as R
 import numpy as np
 import tensorflow as tf
 
-def make_generator(file_name, entry_start, entry_stop, n_tau, n_pf, n_fe, n_counts, z = False):
+from mymodel import *
+
+### Function that creates generators:
+def make_generator(file_name, entry_start, entry_stop, z = False):
     data_loader = R.DataLoader(file_name, n_tau, entry_start, entry_stop)
     n_batches = data_loader.NumberOfBatches()
 
@@ -28,8 +31,14 @@ def make_generator(file_name, entry_start, entry_stop, n_tau, n_pf, n_fe, n_coun
     
     return generator, n_batches
 
-def training(model, generator, generator_val, n_tau, n_pf, n_fe, n_counts, n_epoch, n_batches,n_steps):
 
+### This function compiles and trains the model:
+def training(model):
+    ### Generator creation:
+    generator, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start, entry_stop)
+    generator_val, n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val) 
+    
+    ### Save validation set in memory:
     x_val = None
     y_val = None
     count_steps = 0
@@ -46,10 +55,11 @@ def training(model, generator, generator_val, n_tau, n_pf, n_fe, n_counts, n_epo
 
         if count_steps >= n_steps: break
 
-    print(x_val.shape)
-    print(y_val.shape)
 
-    model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.01), loss="mse", metrics=["mae","accuracy"])
+    # model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.01), loss="mse", metrics=[MyAccuracy()], run_eagerly=True)
+    model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.001), loss=CustomMSE(), metrics=[MyAccuracy()], run_eagerly=True)
+    # run_eagerly=True is there to convert tensors to numpy in mymodel.py
+    
     history = model.fit(x = tf.data.Dataset.from_generator(generator,(tf.float32, tf.float32),\
                             (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,n_counts]))),\
                             validation_data = (x_val,y_val), epochs = n_epoch, steps_per_epoch = n_batches)

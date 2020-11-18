@@ -4,13 +4,17 @@ import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
 import numpy as np
 
-def plot_metrics(history, n_epoch):
+from mymodel import *
+
+### Plots the loss and accuracy for the trainset and the validationset:
+def plot_metrics(history):
     epochs = history.epoch
     hist = pd.DataFrame(history.history)
+    print(hist)
     loss = hist["loss"]
-    acc = hist["accuracy"]
+    acc  = hist["myaccuracy"]
     loss_val = hist["val_loss"]
-    acc_val = hist["val_accuracy"]
+    acc_val  = hist["val_myaccuracy"]
 
     fig0, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
     fig0.suptitle('Metrics')
@@ -32,7 +36,7 @@ def plot_metrics(history, n_epoch):
     pdf0.close()
     plt.close()
 
-### Confusion matrix of decay modes:
+### Plots the confusion matrix of decay modes:
 def plt_conf_dm(conf_dm_mat, old = False):
     x_axis_labels = ['$\pi^{\pm}$','$\pi^{\pm} + \pi^0$', '$\pi^{\pm} + 2\pi^0$', \
                  '$\pi^{\pm} + 3\pi^0$','$3\pi^{\pm}$', '$3\pi^{\pm} + 1\pi^0$',\
@@ -43,11 +47,11 @@ def plt_conf_dm(conf_dm_mat, old = False):
     sns.heatmap(conf_dm_mat,xticklabels=x_axis_labels, yticklabels=y_axis_labels, cmap='YlGnBu', annot=True, fmt="3.0f")
     plt.ylim(-0.5,9.5)
     plt.xlim(-0.5,9.5)
+    plt.ylabel('True decay mode',fontsize = 16)
     if old == False:
-        plt.ylabel('True decay mode',fontsize = 16)
+        plt.xlabel('Predicted decay mode',fontsize = 16)
     else:
-        plt.ylabel('Old reconstruction decay mode',fontsize = 16)
-    plt.xlabel('Predicted decay mode',fontsize = 16)
+        plt.xlabel('Old reconstruction decay mode',fontsize = 16)
     plt.tight_layout()
     plt.show()
     plt.close()
@@ -65,34 +69,7 @@ def plt_conf_dm(conf_dm_mat, old = False):
     # print('Probabilities of decay mode for true: \n',tot_dm_norm,'\n')
 
 
-### Accuracy calculation:
-def accuracy_calc(conf_dm_mat):
-    ## Normalization of cond_dm_mat:
-    conf_dm_mat_norm = conf_dm_mat
-    for i in range(0,len(conf_dm_mat[0,:])):
-        summy = 0
-        summy = conf_dm_mat[i,:].sum() # sum of line => normalize lines
-        if (summy != 0):
-            conf_dm_mat_norm[i,:] = conf_dm_mat[i,:]/summy
 
-    # fig = plt.figure(figsize=(5,5))
-    # sns.heatmap(conf_dm_mat_norm, cmap='YlGnBu', annot=True, fmt="3.0f")
-    # plt.ylim(-0.5,23.5)
-    # plt.xlim(-0.5,23.5)
-    # plt.ylabel('True decay mode',fontsize = 16)
-    # plt.xlabel('Predicted decay mode',fontsize = 16)
-    # plt.show()
-    # plt.close()
-    # pdf = pp.PdfPages("./Plots/conf_dm_mat_norm.pdf")
-    # pdf.savefig(fig)
-    # pdf.close()
-
-    ## Accuracy extraction for important decay modes:
-    accuracy = np.zeros(7)
-    for i in range(0,7):
-        accuracy[i] = conf_dm_mat_norm[i,i]
-
-    return accuracy
 
 
 #################################################################################
