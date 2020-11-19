@@ -7,8 +7,10 @@ from mymodel import * #gives us all n_tau, n_pf, ....
 from plotting import plot_metrics, plt_conf_dm
 from evaluation import evaluation, accuracy_calc
 
+data_loader = R.DataLoader('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root', n_tau, entry_start, entry_stop)
+map_features = data_loader.MapCreation()
 
-model = MyModel() # creates the model
+model = MyModel(map_features) # creates the model
 
 history = training(model) # trains the model
 

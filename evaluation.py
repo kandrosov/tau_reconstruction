@@ -64,7 +64,7 @@ def accuracy_calc(conf_dm_mat):
 
     ## Accuracy extraction for important decay modes:
     accuracy = np.zeros(7)
-    weights = [0.1151, 0.2593, 0.1081, 0.0118, 0.0980, 0.0476, 0.0051, 0.0029]
+    weights = np.array([0.1151, 0.2593, 0.1081, 0.0118, 0.0980, 0.0476, 0.0051, 0.0029])
     weights = weights/weights.sum()
     accuracy_value = 0
     for i in range(0,7):

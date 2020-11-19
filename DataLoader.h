@@ -1,8 +1,6 @@
 #include "TauTuple.h"
 
-
-std::shared_ptr<TFile> OpenRootFile(const std::string& file_name)
-{
+std::shared_ptr<TFile> OpenRootFile(const std::string& file_name){
     std::shared_ptr<TFile> file(TFile::Open(file_name.c_str(), "READ"));
     if(!file || file->IsZombie())
         throw std::runtime_error("File not opened.");
@@ -17,21 +15,49 @@ struct Data {
 
 // List of features:
 enum class Feature {
-    pfCand_pt     = 0,
-    pfCand_eta    = 1,
-    pfCand_phi    = 2,
-    pfCand_mass   = 3,
-    pfCand_pdgId  = 4,
-    pfCand_charge = 5,
-    tau_decayMode = 6, //Not a feature. Used to compare to old method.
+    pfCand_pt                   = 0,
+    pfCand_eta                  = 1,
+    pfCand_phi                  = 2,
+    pfCand_mass                 = 3,
+    pfCand_pdgId                = 4,
+    pfCand_charge               = 5,
+    pfCand_pvAssociationQuality = 6,
+    pfCand_fromPV               = 7,
+    pfCand_puppiWeight          = 8, 
+    pfCand_puppiWeightNoLep     = 9,
+    pfCand_lostInnerHits        = 10,
+    pfCand_numberOfPixelHits    = 11,
+    pfCand_numberOfHits         = 12,
+    pfCand_hasTrackDetails      = 13,
+    pfCand_dxy                  = 14,
+    pfCand_dxy_error            = 15,
+    pfCand_dz                   = 16,
+    pfCand_dz_error             = 17,
+    pfCand_track_chi2           = 18,
+    pfCand_track_ndof           = 19,
+    pfCand_caloFraction         = 20,
+    pfCand_hcalFraction         = 21,
+    pfCand_rawCaloFraction      = 22,
+    pfCand_rawHcalFraction      = 23,
 };
 
+string feature_names[24] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_pdgId", "pfCand_charge", 
+    "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
+    "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
+    "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
+    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction"};
 
 struct DataLoader {
+
     //This is the constructor:
     DataLoader(std::string file_name, size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
-        file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset){ }
-    
+        file(OpenRootFile(file_name)), 
+        tuple(file.get(), true), 
+        n_tau(_n_tau), 
+        current_entry(_start_dataset), 
+        start_dataset(_start_dataset), 
+        end_dataset(_end_dataset){}
+ 
     std::shared_ptr<TFile> file;
     tau_tuple::TauTuple tuple; // tuple is the tree
     size_t n_tau; // number of events(=taus)
@@ -39,9 +65,18 @@ struct DataLoader {
     Long64_t end_dataset;
     Long64_t current_entry; // number of the current entry
 
-    static const size_t n_pf  = 100; // number of pf candidates per event
-    static const size_t n_fe  = 6;   // number of featurese per pf candidate
-    static const size_t n_count = 2; // chanrged and neutral particle count
+    static const size_t n_pf    = 100; // number of pf candidates per event
+    static const size_t n_fe    = 24;  // number of featurese per pf candidate
+    static const size_t n_count = 2;   // chanrged and neutral particle count
+
+    std::map<std::string, int> mapOfFeatures;
+    std::map<std::string, int> MapCreation(){
+        std::map<std::string, int> mapOfFeatures;
+        for(size_t i = 0; i <= 23; ++i){
+            mapOfFeatures[feature_names[i]] = i;
+        }
+        return mapOfFeatures;
+    }
 
     bool HasNext() {     
         return (current_entry + n_tau) < end_dataset;
@@ -77,19 +112,71 @@ struct DataLoader {
                 size_t pf_size = tau.pfCand_pt.size(); 
                 if(pf_ind < pf_size){
                     // Fill the data with the features:
-                    get_x(Feature::pfCand_pt)     = tau.pfCand_pt.at(pf_ind);
-                    get_x(Feature::pfCand_eta)    = tau.pfCand_eta.at(pf_ind);
-                    get_x(Feature::pfCand_phi)    = tau.pfCand_phi.at(pf_ind);
-                    get_x(Feature::pfCand_mass)   = tau.pfCand_mass.at(pf_ind);
-                    get_x(Feature::pfCand_pdgId)  = tau.pfCand_pdgId.at(pf_ind);
-                    get_x(Feature::pfCand_charge) = tau.pfCand_charge.at(pf_ind);
+                    // for(int i = 0; i <= 23; ++i){
+                    //     std::cout << i << std::endl;
+                    //     execute("get_x(Feature::"+feature_names[i]+") = tau."+feature_names[i]+".at(pf_ind)");
+                    // }
+                    get_x(Feature::pfCand_pt)                   = tau.pfCand_pt.at(pf_ind);
+                    get_x(Feature::pfCand_eta)                  = tau.pfCand_eta.at(pf_ind);
+                    get_x(Feature::pfCand_phi)                  = tau.pfCand_phi.at(pf_ind);
+                    get_x(Feature::pfCand_mass)                 = tau.pfCand_mass.at(pf_ind);
+                    get_x(Feature::pfCand_pdgId)                = tau.pfCand_pdgId.at(pf_ind);
+                    get_x(Feature::pfCand_charge)               = tau.pfCand_charge.at(pf_ind);
+                    get_x(Feature::pfCand_pvAssociationQuality) = tau.pfCand_pvAssociationQuality.at(pf_ind);
+                    get_x(Feature::pfCand_fromPV)               = tau.pfCand_fromPV.at(pf_ind);
+                    get_x(Feature::pfCand_puppiWeight)          = tau.pfCand_puppiWeight.at(pf_ind);
+                    get_x(Feature::pfCand_puppiWeightNoLep)     = tau.pfCand_puppiWeightNoLep.at(pf_ind);
+                    get_x(Feature::pfCand_lostInnerHits)        = tau.pfCand_lostInnerHits.at(pf_ind);
+                    get_x(Feature::pfCand_numberOfPixelHits)    = tau.pfCand_numberOfPixelHits.at(pf_ind);
+                    get_x(Feature::pfCand_numberOfHits)         = tau.pfCand_numberOfHits.at(pf_ind);
+                    get_x(Feature::pfCand_hasTrackDetails)      = tau.pfCand_hasTrackDetails.at(pf_ind);
+                    get_x(Feature::pfCand_dxy)                  = tau.pfCand_dxy.at(pf_ind);
+                    get_x(Feature::pfCand_dz)                   = tau.pfCand_dz.at(pf_ind);
+                    get_x(Feature::pfCand_caloFraction)         = tau.pfCand_caloFraction.at(pf_ind);
+                    get_x(Feature::pfCand_hcalFraction)         = tau.pfCand_hcalFraction.at(pf_ind);
+                    get_x(Feature::pfCand_rawCaloFraction)      = tau.pfCand_rawCaloFraction.at(pf_ind);
+                    get_x(Feature::pfCand_rawHcalFraction)      = tau.pfCand_rawHcalFraction.at(pf_ind);
+
+                    // Some features are invalid for the case where hasTrackDetails == 0:
+                    if(tau.pfCand_hasTrackDetails.at(pf_ind) == 1){
+                    get_x(Feature::pfCand_dxy_error)            = tau.pfCand_dxy_error.at(pf_ind);
+                    get_x(Feature::pfCand_dz_error)             = tau.pfCand_dz_error.at(pf_ind);
+                    get_x(Feature::pfCand_track_chi2)           = tau.pfCand_track_chi2.at(pf_ind);
+                    get_x(Feature::pfCand_track_ndof)           = tau.pfCand_track_ndof.at(pf_ind);
+                    }else{
+                        set_x_0(Feature::pfCand_dxy_error);
+                        set_x_0(Feature::pfCand_dz_error);
+                        set_x_0(Feature::pfCand_track_chi2);
+                        set_x_0(Feature::pfCand_track_ndof);
+                    }
                 } else{
+                    // for(int i = 0; i <= 23; ++i){
+                    //     set_x_0(Feature::feature_names[i]);
+                    // }
                     set_x_0(Feature::pfCand_pt);
                     set_x_0(Feature::pfCand_eta);
                     set_x_0(Feature::pfCand_phi);
                     set_x_0(Feature::pfCand_mass);
                     set_x_0(Feature::pfCand_pdgId);
                     set_x_0(Feature::pfCand_charge);
+                    set_x_0(Feature::pfCand_pvAssociationQuality);
+                    set_x_0(Feature::pfCand_fromPV);
+                    set_x_0(Feature::pfCand_puppiWeight);
+                    set_x_0(Feature::pfCand_puppiWeightNoLep);
+                    set_x_0(Feature::pfCand_lostInnerHits);
+                    set_x_0(Feature::pfCand_numberOfPixelHits);
+                    set_x_0(Feature::pfCand_numberOfHits);
+                    set_x_0(Feature::pfCand_hasTrackDetails);
+                    set_x_0(Feature::pfCand_dxy);
+                    set_x_0(Feature::pfCand_dxy_error);
+                    set_x_0(Feature::pfCand_dz);
+                    set_x_0(Feature::pfCand_dz_error);
+                    set_x_0(Feature::pfCand_track_chi2);
+                    set_x_0(Feature::pfCand_track_ndof);
+                    set_x_0(Feature::pfCand_caloFraction);
+                    set_x_0(Feature::pfCand_hcalFraction);
+                    set_x_0(Feature::pfCand_rawCaloFraction);
+                    set_x_0(Feature::pfCand_rawHcalFraction);
                 }
             }
             if(current_entry == end_dataset){

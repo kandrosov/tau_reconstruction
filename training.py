@@ -38,6 +38,7 @@ def training(model):
     generator, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start, entry_stop)
     generator_val, n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val) 
     
+
     ### Save validation set in memory:
     x_val = None
     y_val = None
@@ -46,8 +47,6 @@ def training(model):
         if x_val is None:
             x_val = x
             y_val = y
-            print(x.shape)
-            print(y.shape)
         else:
             x_val = np.append(x_val,x, axis = 0)
             y_val = np.append(y_val,y, axis = 0)
@@ -55,11 +54,9 @@ def training(model):
 
         if count_steps >= n_steps: break
 
-
-    # model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.01), loss="mse", metrics=[MyAccuracy()], run_eagerly=True)
     model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.001), loss=CustomMSE(), metrics=[MyAccuracy()], run_eagerly=True)
     # run_eagerly=True is there to convert tensors to numpy in mymodel.py
-    
+
     history = model.fit(x = tf.data.Dataset.from_generator(generator,(tf.float32, tf.float32),\
                             (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,n_counts]))),\
                             validation_data = (x_val,y_val), epochs = n_epoch, steps_per_epoch = n_batches)
