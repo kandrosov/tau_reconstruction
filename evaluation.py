@@ -5,10 +5,9 @@ import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
 
 from mymodel import *
-from training import make_generator
 
 def evaluation():
-    print('\n Start evaluation, load model and generator:\n')
+    print('\nStart evaluation, load model and generator:\n')
     ### Reconstruct the model:
     model = keras.models.load_model("../Models/my_model",compile=False,custom_objects = {'ScaleLayer': ScaleLayer,'StdLayer': StdLayer,'MyAccuracy': MyAccuracy,'CustomMSE': CustomMSE,'MyModel': MyModel})
 
@@ -20,7 +19,7 @@ def evaluation():
     dm_bins = [-0.5,0.5,1.5,2.5,3.5,9.5,10.5,11.5,12.5,23.5]
     count_steps = 0
 
-    print('\n Start generator loop to predict:\n')
+    print('\nStart generator loop to predict:\n')
 
     for x,y,z in generator_xyz(): # y is a (n_tau,n_counts) array
         y_pred = model.predict(x) 

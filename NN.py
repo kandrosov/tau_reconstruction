@@ -4,7 +4,7 @@ import numpy as np
 
 R.gInterpreter.ProcessLine('#include "DataLoader.h"')
 
-from training import training, make_generator
+from training import training
 from mymodel import * #gives us all n_tau, n_pf, ....
 from plotting import plot_metrics, plt_conf_dm
 from evaluation import evaluation, accuracy_calc

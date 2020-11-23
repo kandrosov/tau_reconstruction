@@ -1,4 +1,9 @@
 #include "TauTuple.h"
+#include "TROOT.h"
+#include "TLorentzVector.h"
+#include "Math/Vector4D.h"
+
+using namespace ROOT::Math;
 
 std::shared_ptr<TFile> OpenRootFile(const std::string& file_name){
     std::shared_ptr<TFile> file(TFile::Open(file_name.c_str(), "READ"));
@@ -9,7 +14,7 @@ std::shared_ptr<TFile> OpenRootFile(const std::string& file_name){
 
 
 struct Data {
-    Data(size_t nx, size_t ny, size_t nz) : x(nx), y(ny), z(nz){ }
+    Data(size_t nx, size_t ny, size_t nz) : x(nx, 0), y(ny, 0), z(nz, 0){ }
     std::vector<float> x, y, z;
 };
 
@@ -39,13 +44,18 @@ enum class Feature {
     pfCand_hcalFraction         = 21,
     pfCand_rawCaloFraction      = 22,
     pfCand_rawHcalFraction      = 23,
+    pfCand_valid                = 24,
+    pfCand_px                   = 25,
+    pfCand_py                   = 26,
+    pfCand_pz                   = 27,
+    pfCand_E                    = 28,
 };
 
-string feature_names[24] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_pdgId", "pfCand_charge", 
+string feature_names[29] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_pdgId", "pfCand_charge", 
     "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
     "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
     "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
-    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction"};
+    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid ","pfCand_px","pfCand_py ","pfCand_pz ","pfCand_E "};
 
 struct DataLoader {
 
@@ -61,13 +71,13 @@ struct DataLoader {
     Long64_t current_entry; // number of the current entry
 
     static const size_t n_pf    = 100; // number of pf candidates per event
-    static const size_t n_fe    = 24;  // number of featurese per pf candidate
+    static const size_t n_fe    = 29;  // number of featurese per pf candidate
     static const size_t n_count = 2;   // chanrged and neutral particle count
 
     // Creation of map of features:
     std::map<std::string, int> MapCreation(){
         std::map<std::string, int> mapOfFeatures;
-        for(size_t i = 0; i <= 23; ++i){
+        for(size_t i = 0; i <= 28; ++i){
             mapOfFeatures[feature_names[i]] = i;
         }
         return mapOfFeatures;
@@ -94,31 +104,16 @@ struct DataLoader {
 
             //////////////////////////////////////////////////////////////////////
             // Sort inputs by decreasing pt:
-            // Convert vector to array:
-            std::vector<Float_t> v = tau.pfCand_pt;
-            int n = v.size();
-            float a[n];
-            std::copy(v.begin(), v.end(), a);
+            std::vector<size_t> indices(tau.pfCand_pt.size());
+            std::iota(indices.begin(), indices.end(), 0);
 
-            // Vector to store element with respective present index:
-            vector<pair<float_t, int> > vp; 
-            
-            // Inserting element in pair vector to keep track of previous indexes:
-            for (int i = 0; i < n; ++i) { 
-                vp.push_back(make_pair(a[i], i)); 
-            } 
-            
-            // Sorting pair vector 
-            sort(vp.rbegin(), vp.rend()); // rbegin instead of begin for sorting indescending order
-            
-            // cout << "Element\t" << "index" << endl; 
-            // for (int i = 0; i < vp.size(); i++) { 
-            //     cout << vp[i].first << "\t" << vp[i].second << endl; 
-            // }
-            ////////////////////////////////////////////////////////////////////// 
-            
+            std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
+                return tau.pfCand_pt.at(a) > tau.pfCand_pt.at(b);
+            });
+            //////////////////////////////////////////////////////////////////////
 
-            for(size_t pf_ind = 0; pf_ind < n_pf; ++pf_ind) {
+
+            for(size_t pf_ind = 0; pf_ind < indices.size(); ++pf_ind) {
                 
                 auto get_x = [&](Feature fe) -> float& {
                     size_t index = GetIndex_x(tau_ind, pf_ind, fe);
@@ -128,14 +123,10 @@ struct DataLoader {
                 size_t pf_size = tau.pfCand_pt.size(); 
                 static constexpr float def_val = 0.f;
                 const bool has_cand = pf_ind < pf_size;
-                size_t pf_ind_sorted;
-                if(has_cand){
-                    pf_ind_sorted = vp[pf_ind].second; 
-                }else{
-                    pf_ind_sorted = pf_ind; 
-                }
+                size_t pf_ind_sorted = indices.at(pf_ind);
 
                 const bool has_trk_details = has_cand && tau.pfCand_hasTrackDetails.at(pf_ind_sorted);
+                const bool dz_not_NaN = has_cand && (std::isnormal(tau.pfCand_dz.at(pf_ind_sorted)) || tau.pfCand_dz.at(pf_ind_sorted) == 0);
 
                 get_x(Feature::pfCand_pt)                   = has_cand ? tau.pfCand_pt.at(pf_ind_sorted)                   : def_val;
                 get_x(Feature::pfCand_eta)                  = has_cand ? tau.pfCand_eta.at(pf_ind_sorted)                  : def_val;
@@ -152,11 +143,19 @@ struct DataLoader {
                 get_x(Feature::pfCand_numberOfHits)         = has_cand ? tau.pfCand_numberOfHits.at(pf_ind_sorted)         : def_val;
                 get_x(Feature::pfCand_hasTrackDetails)      = has_cand ? tau.pfCand_hasTrackDetails.at(pf_ind_sorted)      : def_val;
                 get_x(Feature::pfCand_dxy)                  = has_cand ? tau.pfCand_dxy.at(pf_ind_sorted)                  : def_val;
-                get_x(Feature::pfCand_dz)                   = has_cand ? tau.pfCand_dz.at(pf_ind_sorted)                   : def_val;
+                get_x(Feature::pfCand_dz)                   = dz_not_NaN ? tau.pfCand_dz.at(pf_ind_sorted)                 : def_val;
                 get_x(Feature::pfCand_caloFraction)         = has_cand ? tau.pfCand_caloFraction.at(pf_ind_sorted)         : def_val;
                 get_x(Feature::pfCand_hcalFraction)         = has_cand ? tau.pfCand_hcalFraction.at(pf_ind_sorted)         : def_val;
                 get_x(Feature::pfCand_rawCaloFraction)      = has_cand ? tau.pfCand_rawCaloFraction.at(pf_ind_sorted)      : def_val;
                 get_x(Feature::pfCand_rawHcalFraction)      = has_cand ? tau.pfCand_rawHcalFraction.at(pf_ind_sorted)      : def_val;
+                get_x(Feature::pfCand_valid)                = has_cand ? 1                                                 : 0      ;
+                
+                TLorentzVector *v = new TLorentzVector();
+                v->SetPtEtaPhiM(tau.pfCand_pt.at(pf_ind_sorted), tau.pfCand_eta.at(pf_ind_sorted),tau.pfCand_phi.at(pf_ind_sorted),tau.pfCand_mass.at(pf_ind_sorted));
+                get_x(Feature::pfCand_px)                   = has_cand ? v->Px() : def_val;
+                get_x(Feature::pfCand_py)                   = has_cand ? v->Py() : def_val;
+                get_x(Feature::pfCand_pz)                   = has_cand ? v->Pz() : def_val;
+                get_x(Feature::pfCand_E)                    = has_cand ? v->E()  : def_val;
 
                 get_x(Feature::pfCand_dxy_error)            = has_trk_details ? tau.pfCand_dxy_error.at(pf_ind_sorted)     : def_val;
                 get_x(Feature::pfCand_dz_error)             = has_trk_details ? tau.pfCand_dz_error.at(pf_ind_sorted)      : def_val;

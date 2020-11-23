@@ -1,3 +1,4 @@
+import ROOT as R
 import tensorflow as tf
 import numpy as np
 from tensorflow import keras
@@ -6,11 +7,11 @@ import json
 ### All the parameters:
 n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 100 # number of pf candidates per event
-n_fe     = 24  # total muber of features: 24
+n_fe     = 29  # total muber of features: 24
 n_counts = 2   # number of labels per event
 n_epoch  = 3  # number of epochs on which to train
 n_steps_val   = 14213
-n_steps_test  = 63969  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_steps_test  = 63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start = 0
 entry_stop  = 6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
@@ -20,8 +21,10 @@ print('Entry_start_val:', entry_start_val)
 entry_stop_val   = entry_stop + n_tau*n_steps_val + 1
 print('Entry_stop_val: ',entry_stop_val)
 entry_start_test = entry_stop_val+1
-entry_stop_test  = entry_stop + n_tau*n_steps_test + 1
+entry_stop_test  = entry_stop_val + n_tau*n_steps_test + 1
 print('Entry_stop_test (<= 14215297): ',entry_stop_test)
+
+myresults_val = np.zeros((n_epoch,2)) # 2D array containinf loss and myaccuracy for validation set
 
 class StdLayer(tf.keras.layers.Layer):
     def __init__(self, file_name, var_pos, n_sigmas, **kwargs):
@@ -114,7 +117,32 @@ class MyModel(tf.keras.Model):
         return x
 
     
+### Function that creates generators:
+def make_generator(file_name, entry_begin, entry_end, z = False):
+    _data_loader = R.DataLoader(file_name, n_tau, entry_begin, entry_end)
+    _n_batches   = _data_loader.NumberOfBatches()
 
+    def _generator():
+        cnt = 0
+        while True:
+            _data_loader.Reset()
+            while _data_loader.HasNext(): # questo non funziona !!!
+                data = _data_loader.LoadNext()
+                x_np = np.asarray(data.x)
+                x_3d = x_np.reshape((n_tau, n_pf, n_fe))
+                y_np = np.asarray(data.y)
+                y_2d = y_np.reshape((n_tau, n_counts))
+                if z == True:
+                    z_1d = np.asarray(data.z)
+                    yield x_3d, y_2d, z_1d
+                else:
+                    yield x_3d, y_2d
+            ++cnt
+            if cnt == 1000: 
+                gc.collect() # garbage collection to improve preformance
+                cnt = 0
+    
+    return _generator, _n_batches
 
 #############################################################################################
 ##### Custom metrics:
@@ -178,3 +206,10 @@ class CustomMSE(keras.losses.Loss):
         mse1 = tf.math.reduce_mean(tf.square(y_true[:,0] - y_pred[:,0]))
         mse2 = tf.math.reduce_mean(tf.square(y_true[:,1] - y_pred[:,1]))
         return mse1 + mse2
+
+class ValidationCallback(tf.keras.callbacks.Callback):
+
+    def on_epoch_end(self, epoch, logs=None):
+        generator_val, n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val) 
+        myresults_val[epoch] = self.model.evaluate(x = tf.data.Dataset.from_generator(generator_val,(tf.float32, tf.float32),\
+                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,n_counts]))), steps = n_steps_val)
