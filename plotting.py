@@ -9,13 +9,14 @@ from mymodel import *
 ### Plots the loss and accuracy for the trainset and the validationset:
 def plot_metrics(history):
     epochs = history.epoch
-    hist = pd.DataFrame(history.history)
+    hist   = pd.DataFrame(history.history)
+    # print(history.history)
     # print('Loss and myaccuracy for training: \n',hist)
     # print('Loss and myaccuracy for validation: \n',myresults_val)
-    loss = hist["loss"]
-    acc  = hist["myaccuracy"]
-    loss_val = myresults_val[:,0]
-    acc_val  = myresults_val[:,1]
+    loss     = hist["loss"]
+    acc      = hist["my_acc"]
+    loss_val = hist["val_loss"] 
+    acc_val  = hist["val_acc"]
 
     fig0, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
     fig0.suptitle('Metrics')
@@ -31,7 +32,7 @@ def plot_metrics(history):
     axes[1].plot(epochs, acc, 'bo--', label="accuracy")
     axes[1].plot(epochs, acc_val, 'ro--', label=" val accuracy")
     axes[1].legend()
-    plt.show()
+    # plt.show()
     pdf0 = pp.PdfPages("../Plots/Metrics.pdf")
     pdf0.savefig(fig0)
     pdf0.close()

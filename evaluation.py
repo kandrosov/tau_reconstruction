@@ -9,7 +9,7 @@ from mymodel import *
 def evaluation():
     print('\nStart evaluation, load model and generator:\n')
     ### Reconstruct the model:
-    model = keras.models.load_model("../Models/my_model",compile=False,custom_objects = {'ScaleLayer': ScaleLayer,'StdLayer': StdLayer,'MyAccuracy': MyAccuracy,'CustomMSE': CustomMSE,'MyModel': MyModel})
+    model = keras.models.load_model("../Models/my_model",compile=False,custom_objects = {'ScaleLayer': ScaleLayer,'StdLayer': StdLayer,'my_acc': my_acc,'CustomMSE': CustomMSE,'MyModel': MyModel})
 
     ### Generator creation:
     generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)
@@ -85,12 +85,13 @@ def accuracy_calc(conf_dm_mat, old = False):
     plt.close()
 
     ## Accuracy extraction for important decay modes:
-    accuracy = np.zeros(7)
-    weights = np.array([0.1151, 0.2593, 0.1081, 0.0118, 0.0980, 0.0476, 0.0051, 0.0029])
-    weights = weights/weights.sum()
+    accuracy = np.zeros(8)
+    # weights = np.array([0.1151, 0.2593, 0.1081, 0.0118, 0.0980, 0.0476, 0.0051, 0.0029])
+    # weights = weights/weights.sum()
     accuracy_value = 0
-    for i in range(0,7):
+    for i in range(0,8):
         accuracy[i] = conf_dm_mat_norm[i,i]
-        accuracy_value += weights[i]*accuracy[i]
+        # accuracy_value += weights[i]*accuracy[i]
+        accuracy_value += accuracy[i]
 
     return accuracy_value
