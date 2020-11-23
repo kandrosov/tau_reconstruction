@@ -51,12 +51,7 @@ struct DataLoader {
 
     //This is the constructor:
     DataLoader(std::string file_name, size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
-        file(OpenRootFile(file_name)), 
-        tuple(file.get(), true), 
-        n_tau(_n_tau), 
-        current_entry(_start_dataset), 
-        start_dataset(_start_dataset), 
-        end_dataset(_end_dataset){}
+        file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset){}
  
     std::shared_ptr<TFile> file;
     tau_tuple::TauTuple tuple; // tuple is the tree
@@ -69,7 +64,7 @@ struct DataLoader {
     static const size_t n_fe    = 24;  // number of featurese per pf candidate
     static const size_t n_count = 2;   // chanrged and neutral particle count
 
-    std::map<std::string, int> mapOfFeatures;
+    // Creation of map of features:
     std::map<std::string, int> MapCreation(){
         std::map<std::string, int> mapOfFeatures;
         for(size_t i = 0; i <= 23; ++i){
@@ -79,7 +74,7 @@ struct DataLoader {
     }
 
     bool HasNext() {     
-        return (current_entry + n_tau) < end_dataset;
+        return (current_entry + n_tau) <= end_dataset;
     }
     Data LoadNext(){
         Data data(n_tau * n_pf * n_fe, n_tau * n_count, n_tau); // Creates an empty data structure
@@ -88,7 +83,7 @@ struct DataLoader {
             tuple.GetEntry(current_entry); // get the entry of the current event
             const tau_tuple::Tau& tau = tuple(); // tau is out tree
 
-            data.z.at(tau_ind) = tau.tau_decayMode; 
+            data.z.at(tau_ind) = tau.tau_decayModeFindingNewDMs ? tau.tau_decayMode : -1; // end is the else
             // Fill the labels:
             auto get_y = [&](size_t count_ind) -> float& {
                 size_t index = GetIndex_y(tau_ind, count_ind);
@@ -97,87 +92,76 @@ struct DataLoader {
             get_y(0) = Count_charged_hadrons_true(tau.lepton_gen_vis_pdg);
             get_y(1) = Count_neutral_hadrons_true(tau.lepton_gen_vis_pdg);
 
-            for(size_t pf_ind = 0; pf_ind < n_pf; ++pf_ind) { 
+            //////////////////////////////////////////////////////////////////////
+            // Sort inputs by decreasing pt:
+            // Convert vector to array:
+            std::vector<Float_t> v = tau.pfCand_pt;
+            int n = v.size();
+            float a[n];
+            std::copy(v.begin(), v.end(), a);
+
+            // Vector to store element with respective present index:
+            vector<pair<float_t, int> > vp; 
+            
+            // Inserting element in pair vector to keep track of previous indexes:
+            for (int i = 0; i < n; ++i) { 
+                vp.push_back(make_pair(a[i], i)); 
+            } 
+            
+            // Sorting pair vector 
+            sort(vp.rbegin(), vp.rend()); // rbegin instead of begin for sorting indescending order
+            
+            // cout << "Element\t" << "index" << endl; 
+            // for (int i = 0; i < vp.size(); i++) { 
+            //     cout << vp[i].first << "\t" << vp[i].second << endl; 
+            // }
+            ////////////////////////////////////////////////////////////////////// 
+            
+
+            for(size_t pf_ind = 0; pf_ind < n_pf; ++pf_ind) {
                 
                 auto get_x = [&](Feature fe) -> float& {
                     size_t index = GetIndex_x(tau_ind, pf_ind, fe);
                     return data.x.at(index);
                 };
-
-                auto set_x_0 = [&](Feature fe) -> float& {
-                    size_t index = GetIndex_x(tau_ind, pf_ind, fe);
-                    return data.x.at(index) = 0;
-                };
                 
                 size_t pf_size = tau.pfCand_pt.size(); 
-                if(pf_ind < pf_size){
-                    // Fill the data with the features:
-                    // for(int i = 0; i <= 23; ++i){
-                    //     std::cout << i << std::endl;
-                    //     execute("get_x(Feature::"+feature_names[i]+") = tau."+feature_names[i]+".at(pf_ind)");
-                    // }
-                    get_x(Feature::pfCand_pt)                   = tau.pfCand_pt.at(pf_ind);
-                    get_x(Feature::pfCand_eta)                  = tau.pfCand_eta.at(pf_ind);
-                    get_x(Feature::pfCand_phi)                  = tau.pfCand_phi.at(pf_ind);
-                    get_x(Feature::pfCand_mass)                 = tau.pfCand_mass.at(pf_ind);
-                    get_x(Feature::pfCand_pdgId)                = tau.pfCand_pdgId.at(pf_ind);
-                    get_x(Feature::pfCand_charge)               = tau.pfCand_charge.at(pf_ind);
-                    get_x(Feature::pfCand_pvAssociationQuality) = tau.pfCand_pvAssociationQuality.at(pf_ind);
-                    get_x(Feature::pfCand_fromPV)               = tau.pfCand_fromPV.at(pf_ind);
-                    get_x(Feature::pfCand_puppiWeight)          = tau.pfCand_puppiWeight.at(pf_ind);
-                    get_x(Feature::pfCand_puppiWeightNoLep)     = tau.pfCand_puppiWeightNoLep.at(pf_ind);
-                    get_x(Feature::pfCand_lostInnerHits)        = tau.pfCand_lostInnerHits.at(pf_ind);
-                    get_x(Feature::pfCand_numberOfPixelHits)    = tau.pfCand_numberOfPixelHits.at(pf_ind);
-                    get_x(Feature::pfCand_numberOfHits)         = tau.pfCand_numberOfHits.at(pf_ind);
-                    get_x(Feature::pfCand_hasTrackDetails)      = tau.pfCand_hasTrackDetails.at(pf_ind);
-                    get_x(Feature::pfCand_dxy)                  = tau.pfCand_dxy.at(pf_ind);
-                    get_x(Feature::pfCand_dz)                   = tau.pfCand_dz.at(pf_ind);
-                    get_x(Feature::pfCand_caloFraction)         = tau.pfCand_caloFraction.at(pf_ind);
-                    get_x(Feature::pfCand_hcalFraction)         = tau.pfCand_hcalFraction.at(pf_ind);
-                    get_x(Feature::pfCand_rawCaloFraction)      = tau.pfCand_rawCaloFraction.at(pf_ind);
-                    get_x(Feature::pfCand_rawHcalFraction)      = tau.pfCand_rawHcalFraction.at(pf_ind);
-
-                    // Some features are invalid for the case where hasTrackDetails == 0:
-                    if(tau.pfCand_hasTrackDetails.at(pf_ind) == 1){
-                    get_x(Feature::pfCand_dxy_error)            = tau.pfCand_dxy_error.at(pf_ind);
-                    get_x(Feature::pfCand_dz_error)             = tau.pfCand_dz_error.at(pf_ind);
-                    get_x(Feature::pfCand_track_chi2)           = tau.pfCand_track_chi2.at(pf_ind);
-                    get_x(Feature::pfCand_track_ndof)           = tau.pfCand_track_ndof.at(pf_ind);
-                    }else{
-                        set_x_0(Feature::pfCand_dxy_error);
-                        set_x_0(Feature::pfCand_dz_error);
-                        set_x_0(Feature::pfCand_track_chi2);
-                        set_x_0(Feature::pfCand_track_ndof);
-                    }
-                } else{
-                    // for(int i = 0; i <= 23; ++i){
-                    //     set_x_0(Feature::feature_names[i]);
-                    // }
-                    set_x_0(Feature::pfCand_pt);
-                    set_x_0(Feature::pfCand_eta);
-                    set_x_0(Feature::pfCand_phi);
-                    set_x_0(Feature::pfCand_mass);
-                    set_x_0(Feature::pfCand_pdgId);
-                    set_x_0(Feature::pfCand_charge);
-                    set_x_0(Feature::pfCand_pvAssociationQuality);
-                    set_x_0(Feature::pfCand_fromPV);
-                    set_x_0(Feature::pfCand_puppiWeight);
-                    set_x_0(Feature::pfCand_puppiWeightNoLep);
-                    set_x_0(Feature::pfCand_lostInnerHits);
-                    set_x_0(Feature::pfCand_numberOfPixelHits);
-                    set_x_0(Feature::pfCand_numberOfHits);
-                    set_x_0(Feature::pfCand_hasTrackDetails);
-                    set_x_0(Feature::pfCand_dxy);
-                    set_x_0(Feature::pfCand_dxy_error);
-                    set_x_0(Feature::pfCand_dz);
-                    set_x_0(Feature::pfCand_dz_error);
-                    set_x_0(Feature::pfCand_track_chi2);
-                    set_x_0(Feature::pfCand_track_ndof);
-                    set_x_0(Feature::pfCand_caloFraction);
-                    set_x_0(Feature::pfCand_hcalFraction);
-                    set_x_0(Feature::pfCand_rawCaloFraction);
-                    set_x_0(Feature::pfCand_rawHcalFraction);
+                static constexpr float def_val = 0.f;
+                const bool has_cand = pf_ind < pf_size;
+                size_t pf_ind_sorted;
+                if(has_cand){
+                    pf_ind_sorted = vp[pf_ind].second; 
+                }else{
+                    pf_ind_sorted = pf_ind; 
                 }
+
+                const bool has_trk_details = has_cand && tau.pfCand_hasTrackDetails.at(pf_ind_sorted);
+
+                get_x(Feature::pfCand_pt)                   = has_cand ? tau.pfCand_pt.at(pf_ind_sorted)                   : def_val;
+                get_x(Feature::pfCand_eta)                  = has_cand ? tau.pfCand_eta.at(pf_ind_sorted)                  : def_val;
+                get_x(Feature::pfCand_phi)                  = has_cand ? tau.pfCand_phi.at(pf_ind_sorted)                  : def_val;
+                get_x(Feature::pfCand_mass)                 = has_cand ? tau.pfCand_mass.at(pf_ind_sorted)                 : def_val;
+                get_x(Feature::pfCand_pdgId)                = has_cand ? tau.pfCand_pdgId.at(pf_ind_sorted)                : def_val;
+                get_x(Feature::pfCand_charge)               = has_cand ? tau.pfCand_charge.at(pf_ind_sorted)               : def_val;
+                get_x(Feature::pfCand_pvAssociationQuality) = has_cand ? tau.pfCand_pvAssociationQuality.at(pf_ind_sorted) : def_val;
+                get_x(Feature::pfCand_fromPV)               = has_cand ? tau.pfCand_fromPV.at(pf_ind_sorted)               : def_val;
+                get_x(Feature::pfCand_puppiWeight)          = has_cand ? tau.pfCand_puppiWeight.at(pf_ind_sorted)          : def_val;
+                get_x(Feature::pfCand_puppiWeightNoLep)     = has_cand ? tau.pfCand_puppiWeightNoLep.at(pf_ind_sorted)     : def_val;
+                get_x(Feature::pfCand_lostInnerHits)        = has_cand ? tau.pfCand_lostInnerHits.at(pf_ind_sorted)        : def_val;
+                get_x(Feature::pfCand_numberOfPixelHits)    = has_cand ? tau.pfCand_numberOfPixelHits.at(pf_ind_sorted)    : def_val;
+                get_x(Feature::pfCand_numberOfHits)         = has_cand ? tau.pfCand_numberOfHits.at(pf_ind_sorted)         : def_val;
+                get_x(Feature::pfCand_hasTrackDetails)      = has_cand ? tau.pfCand_hasTrackDetails.at(pf_ind_sorted)      : def_val;
+                get_x(Feature::pfCand_dxy)                  = has_cand ? tau.pfCand_dxy.at(pf_ind_sorted)                  : def_val;
+                get_x(Feature::pfCand_dz)                   = has_cand ? tau.pfCand_dz.at(pf_ind_sorted)                   : def_val;
+                get_x(Feature::pfCand_caloFraction)         = has_cand ? tau.pfCand_caloFraction.at(pf_ind_sorted)         : def_val;
+                get_x(Feature::pfCand_hcalFraction)         = has_cand ? tau.pfCand_hcalFraction.at(pf_ind_sorted)         : def_val;
+                get_x(Feature::pfCand_rawCaloFraction)      = has_cand ? tau.pfCand_rawCaloFraction.at(pf_ind_sorted)      : def_val;
+                get_x(Feature::pfCand_rawHcalFraction)      = has_cand ? tau.pfCand_rawHcalFraction.at(pf_ind_sorted)      : def_val;
+
+                get_x(Feature::pfCand_dxy_error)            = has_trk_details ? tau.pfCand_dxy_error.at(pf_ind_sorted)     : def_val;
+                get_x(Feature::pfCand_dz_error)             = has_trk_details ? tau.pfCand_dz_error.at(pf_ind_sorted)      : def_val;
+                get_x(Feature::pfCand_track_chi2)           = has_trk_details ? tau.pfCand_track_chi2.at(pf_ind_sorted)    : def_val;
+                get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
             }
             if(current_entry == end_dataset){
                 tau_ind = n_tau;
@@ -200,19 +184,19 @@ struct DataLoader {
 
     // This function calculates the corresponding index in a 1D array: 
     // feed a = b.reshape(n_tau,n_pf,n_fe)
-    size_t GetIndex_x(size_t tau_ind, size_t pf_ind, Feature fe) const {
-        size_t fe_ind = static_cast<size_t>(fe);
-        size_t part_pf_direction  = n_fe*pf_ind;
-        size_t part_fe_direction  = fe_ind;
-        size_t part_tau_direction = n_fe*n_pf*tau_ind;
+    size_t GetIndex_x(size_t _tau_ind, size_t _pf_ind, Feature _fe) const {
+        size_t _fe_ind = static_cast<size_t>(_fe);
+        size_t part_pf_direction  = n_fe*_pf_ind;
+        size_t part_fe_direction  = _fe_ind;
+        size_t part_tau_direction = n_fe*n_pf*_tau_ind;
         return part_fe_direction + part_pf_direction + part_tau_direction;
     }
 
     // This function calculates the corresponding index in a 1D array: 
     // feed a = b.reshape(n_tau,n_count)
-    size_t GetIndex_y(size_t tau_ind, size_t count_ind) const {
-        size_t part_count_direction = count_ind;
-        size_t part_tau_direction   = n_count*tau_ind;
+    size_t GetIndex_y(size_t _tau_ind, size_t _count_ind) const {
+        size_t part_count_direction = _count_ind;
+        size_t part_tau_direction   = n_count*_tau_ind;
         return part_count_direction + part_tau_direction;
     }
 

@@ -30,8 +30,8 @@ def plot_metrics(history):
     axes[1].plot(epochs, acc, 'bo--', label="accuracy")
     axes[1].plot(epochs, acc_val, 'ro--', label=" val accuracy")
     axes[1].legend()
-    plt.show()
-    pdf0 = pp.PdfPages("./Plots/Metrics.pdf")
+    # plt.show()
+    pdf0 = pp.PdfPages("../Plots/Metrics.pdf")
     pdf0.savefig(fig0)
     pdf0.close()
     plt.close()
@@ -44,23 +44,24 @@ def plt_conf_dm(conf_dm_mat, old = False):
     y_axis_labels = x_axis_labels # labels for y-axis
 
     fig = plt.figure(figsize=(8,5),dpi=100)
+    plt.title("Decay modes")
     sns.heatmap(conf_dm_mat,xticklabels=x_axis_labels, yticklabels=y_axis_labels, cmap='YlGnBu', annot=True, fmt="3.0f")
     plt.ylim(-0.5,9.5)
     plt.xlim(-0.5,9.5)
-    plt.ylabel('True decay mode',fontsize = 16)
+    plt.ylabel('True',fontsize = 16)
     if old == False:
-        plt.xlabel('Predicted decay mode',fontsize = 16)
+        plt.xlabel('Predicted',fontsize = 16)
     else:
-        plt.xlabel('Old reconstruction decay mode',fontsize = 16)
+        plt.xlabel('Default tau reconstruction',fontsize = 16)
     plt.tight_layout()
-    plt.show()
-    plt.close()
+    # plt.show()
     if old == False:
-        pdf = pp.PdfPages("./Plots/conf_dm_mat.pdf")
+        pdf = pp.PdfPages("../Plots/conf_dm_mat.pdf")
     else: 
-        pdf = pp.PdfPages("./Plots/conf_dm_mat_old.pdf")
+        pdf = pp.PdfPages("../Plots/conf_dm_mat_old.pdf")
     pdf.savefig(fig)
     pdf.close()
+    plt.close()
 
     # ### check the true distribution of the decay modes:
     # tot_dm = conf_dm_mat.sum(axis=1)

@@ -1,0 +1,77 @@
+In module 'ROOTDataFrame':
+/opt/conda/include/ROOT/RDF/InterfaceUtils.hxx:243:4: error: static_assert failed "filter expression returns a type that is not convertible to bool"
+   static_assert(std::is_convertible<FilterRet_t, bool>::value,
+   ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/opt/conda/include/ROOT/RDF/InterfaceUtils.hxx:366:17: note: in instantiation of function template specialization 'ROOT::Internal::RDF::CheckFilter<__rdf::(lambda at input_line_60:2:16)>' requested here
+   RDFInternal::CheckFilter(f);
+                ^
+input_line_65:2:23: note: in instantiation of function template specialization 'ROOT::Internal::RDF::JitFilterHelper<__rdf::(lambda at input_line_60:2:16) &, ROOT::Detail::RDF::RNodeBase>' requested here
+ ROOT::Internal::RDF::JitFilterHelper(__rdf::lambda0, {"pfCand_hasTrackDetails"}, "", reinterpret_cast<std::weak_ptr<ROOT::Detail::RDF::RJittedFilter>*>(0x55b8fd89c380), reinterpret_cast<std::shared_ptr<ROOT::Detail::RDF::RNodeBase>*>(0x55b8f486cee0),reinterpret_cast<ROOT::Internal::RDF::RBookedCustomColumns*>(0x55b8fd873d90));
+                      ^
+In module 'ROOTDataFrame':
+/opt/conda/include/ROOT/RDF/RFilter.hxx:107:14: error: no viable conversion from returned value of type 'ROOT::VecOps::RVec<int>' to function return type 'bool'
+      return fFilter(std::get<S>(fValues[slot]).Get(entry)...);
+             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/opt/conda/include/ROOT/RDF/RFilter.hxx:92:27: note: in instantiation of function template specialization 'ROOT::Detail::RDF::RFilter<__rdf::(lambda at input_line_60:2:16), ROOT::Detail::RDF::RNodeBase>::CheckFilterHelper<0>' requested here
+            auto passed = CheckFilterHelper(slot, entry, TypeInd_t());
+                          ^
+/opt/conda/include/ROOT/RDF/RFilter.hxx:67:4: note: in instantiation of member function 'ROOT::Detail::RDF::RFilter<__rdf::(lambda at input_line_60:2:16), ROOT::Detail::RDF::RNodeBase>::CheckFilters' requested here
+   RFilter(FilterF f, const ColumnNames_t &columns, std::shared_ptr<PrevDataFrame> pd,
+   ^
+/opt/conda/bin/../lib/gcc/x86_64-conda-linux-gnu/7.5.0/../../../../x86_64-conda-linux-gnu/include/c++/7.5.0/bits/unique_ptr.h:821:34: note: in instantiation of member function 'ROOT::Detail::RDF::RFilter<__rdf::(lambda at input_line_60:2:16), ROOT::Detail::RDF::RNodeBase>::RFilter' requested here
+    { return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...)); }
+                                 ^
+/opt/conda/include/ROOT/RDF/InterfaceUtils.hxx:379:33: note: in instantiation of function template specialization 'std::make_unique<ROOT::Detail::RDF::RFilter<__rdf::(lambda at input_line_60:2:16), ROOT::Detail::RDF::RNodeBase>, __rdf::(lambda at input_line_60:2:16) &, const std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > &, std::shared_ptr<ROOT::Detail::RDF::RNodeBase> &, ROOT::Internal::RDF::RBookedCustomColumns &, std::basic_string_view<char, std::char_traits<char> > &>' requested here
+   jittedFilter->SetFilter(std::make_unique<F_t>(std::forward<F>(f), cols, *prevNodeOnHeap, newColumns, name));
+                                ^
+input_line_65:2:23: note: in instantiation of function template specialization 'ROOT::Internal::RDF::JitFilterHelper<__rdf::(lambda at input_line_60:2:16) &, ROOT::Detail::RDF::RNodeBase>' requested here
+ ROOT::Internal::RDF::JitFilterHelper(__rdf::lambda0, {"pfCand_hasTrackDetails"}, "", reinterpret_cast<std::weak_ptr<ROOT::Detail::RDF::RJittedFilter>*>(0x55b8fd89c380), reinterpret_cast<std::shared_ptr<ROOT::Detail::RDF::RNodeBase>*>(0x55b8f486cee0),reinterpret_cast<ROOT::Internal::RDF::RBookedCustomColumns*>(0x55b8fd873d90));
+                      ^
+/opt/conda/include/ROOT/RVec.hxx:343:4: note: candidate template ignored: could not match 'RVec<type-parameter-0-0>' against 'bool'
+   operator RVec<U>() const
+   ^
+In module 'ROOTDataFrame':
+/opt/conda/include/ROOT/RDF/ActionHelpers.hxx:734:24: error: no matching function for call to 'min'
+         fMins[slot] = std::min(v, fMins[slot]);
+                       ^~~~~~~~
+/opt/conda/include/ROOT/RDF/RAction.hxx:237:33: note: in instantiation of function template specialization 'ROOT::Internal::RDF::MinHelper<double>::Exec<ROOT::VecOps::RVec<float>, 0>' requested here
+      ActionCRTP_t::GetHelper().Exec(slot, std::get<S>(fValues[slot]).Get(entry)...);
+                                ^
+/opt/conda/include/ROOT/RDF/RAction.hxx:149:41: note: in instantiation of function template specialization 'ROOT::Internal::RDF::RAction<ROOT::Internal::RDF::MinHelper<double>, ROOT::Detail::RDF::RNodeBase, ROOT::TypeTraits::TypeList<ROOT::VecOps::RVec<float> > >::Exec<0>' requested here
+         static_cast<Action_t *>(this)->Exec(slot, entry, TypeInd_t());
+                                        ^
+/opt/conda/include/ROOT/RDF/RAction.hxx:223:4: note: in instantiation of member function 'ROOT::Internal::RDF::RActionCRTP<ROOT::Internal::RDF::RAction<ROOT::Internal::RDF::MinHelper<double>, ROOT::Detail::RDF::RNodeBase, ROOT::TypeTraits::TypeList<ROOT::VecOps::RVec<float> > > >::Run' requested here
+   RAction(Helper &&h, const ColumnNames_t &bl, std::shared_ptr<PrevDataFrame> pd,
+   ^
+/opt/conda/bin/../lib/gcc/x86_64-conda-linux-gnu/7.5.0/../../../../x86_64-conda-linux-gnu/include/c++/7.5.0/bits/unique_ptr.h:821:34: note: in instantiation of member function 'ROOT::Internal::RDF::RAction<ROOT::Internal::RDF::MinHelper<double>, ROOT::Detail::RDF::RNodeBase, ROOT::TypeTraits::TypeList<ROOT::VecOps::RVec<float> > >::RAction' requested here
+    { return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...)); }
+                                 ^
+/opt/conda/include/ROOT/RDF/InterfaceUtils.hxx:179:16: note: in instantiation of function template specialization 'std::make_unique<ROOT::Internal::RDF::RAction<ROOT::Internal::RDF::MinHelper<double>, ROOT::Detail::RDF::RNodeBase, ROOT::TypeTraits::TypeList<ROOT::VecOps::RVec<float> > >, ROOT::Internal::RDF::MinHelper<double>, const std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > &, std::shared_ptr<ROOT::Detail::RDF::RNodeBase>, ROOT::Internal::RDF::RBookedCustomColumns>' requested here
+   return std::make_unique<Action_t>(Helper_t(minV, nSlots), bl, std::move(prevNode), std::move(customColumns));
+               ^
+/opt/conda/include/ROOT/RDF/InterfaceUtils.hxx:458:21: note: in instantiation of function template specialization 'ROOT::Internal::RDF::BuildAction<ROOT::VecOps::RVec<float>, ROOT::Detail::RDF::RNodeBase, double>' requested here
+   auto actionPtr = BuildAction<BranchTypes...>(bl, std::move(rOnHeap), nSlots, std::move(prevNodePtr), ActionTag{},
+                    ^
+input_line_65:3:442: note: in instantiation of function template specialization 'ROOT::Internal::RDF::CallBuildAction<ROOT::Internal::RDF::ActionTags::Min, ROOT::VecOps::RVec<float> , ROOT::Detail::RDF::RNodeBase, double>' requested here
+ROOT::Internal::RDF::CallBuildAction<ROOT::Internal::RDF::ActionTags::Max, ROOT::VecOps::RVec<float>>(reinterpret_cast<std::shared_ptr<ROOT::Detail::RDF::RNodeBase>*>(0x55b8fdb68490), {"pfCand_eta"}, 1, reinterpret_cast<weak_ptr<double>*>(0x55b8fdaf03b0), reinterpret_cast<std::weak_ptr<ROOT::Internal::RDF::RJittedAction>*>(0x55b8fdb74d00), reinterpret_cast<ROOT::Internal::RDF::RBookedCustomColumns*>(0x55b8fdae8c30));ROOT::Internal::RDF::CallBuildAction<ROOT::Internal::RDF::ActionTags::Min, ROOT::VecOps::RVec<float>>(reinterpret_cast<std::shared_ptr<ROOT::Detail::RDF::RNodeBase>*>(0x55b8f44ce6e0), {"pfCand_eta"}, 1, reinterpret_cast<weak_ptr<double>*>(0x55b8fdca45d0), reinterpret_cast<std::weak_ptr<ROOT::Internal::RDF::RJittedAction>*>(0x55b8fdc89890), reinterpret_cast<ROOT::Internal::RDF::RBookedCustomColumns*>(0x55b8fdbdc430));
+                                                                                                                                                                                                                                                                                                                                                                                                                                                         ^
+/home/conda/feedstock_root/build_artifacts/root_1602841544404/_build_env/bin/../lib/gcc/x86_64-conda-linux-gnu/7.5.0/../../../../x86_64-conda-linux-gnu/include/c++/7.5.0/bits/stl_algobase.h:195:5: note: candidate template ignored: deduced conflicting types for parameter '_Tp' ('float' vs. 'double')
+    min(const _Tp& __a, const _Tp& __b)
+    ^
+/opt/conda/bin/../lib/gcc/x86_64-conda-linux-gnu/7.5.0/../../../../x86_64-conda-linux-gnu/include/c++/7.5.0/bits/stl_algo.h:3456:5: note: candidate template ignored: could not match 'initializer_list<type-parameter-0-0>' against 'float'
+    min(initializer_list<_Tp> __l, _Compare __comp)
+    ^
+/home/conda/feedstock_root/build_artifacts/root_1602841544404/_build_env/bin/../lib/gcc/x86_64-conda-linux-gnu/7.5.0/../../../../x86_64-conda-linux-gnu/include/c++/7.5.0/bits/stl_algobase.h:243:5: note: candidate function template not viable: requires 3 arguments, but 2 were provided
+    min(const _Tp& __a, const _Tp& __b, _Compare __comp)
+    ^
+/opt/conda/bin/../lib/gcc/x86_64-conda-linux-gnu/7.5.0/../../../../x86_64-conda-linux-gnu/include/c++/7.5.0/bits/stl_algo.h:3450:5: note: candidate function template not viable: requires single argument '__l', but 2 arguments were provided
+    min(initializer_list<_Tp> __l)
+    ^
+Traceback (most recent call last):
+  File "Input_characteristics.py", line 28, in <module>
+    print(mymax.GetValue())
+cppyy.gbl.std.runtime_error: const double& ROOT::RDF::RResultPtr<double>::GetValue() =>
+    runtime_error: 
+An error occurred during just-in-time compilation in RLoopManager::Run. The lines above might indicate the cause of the crash
+All RDF objects that have not run their event loop yet should be considered in an invalid state.
+

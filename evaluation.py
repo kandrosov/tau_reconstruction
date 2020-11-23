@@ -1,16 +1,26 @@
 import numpy as np
+import ROOT as R
+import matplotlib.pyplot as plt
+import matplotlib.backends.backend_pdf as pp
+import seaborn as sns
 
 from mymodel import *
 from training import make_generator
 
-def evaluation(model):
+def evaluation():
+    print('\n Start evaluation, load model and generator:\n')
+    ### Reconstruct the model:
+    model = keras.models.load_model("../Models/my_model",compile=False,custom_objects = {'ScaleLayer': ScaleLayer,'StdLayer': StdLayer,'MyAccuracy': MyAccuracy,'CustomMSE': CustomMSE,'MyModel': MyModel})
+
     ### Generator creation:
-    generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start, entry_stop, z = True)
+    generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)
 
     conf_dm_mat = None
     conf_dm_mat_old = None
     dm_bins = [-0.5,0.5,1.5,2.5,3.5,9.5,10.5,11.5,12.5,23.5]
     count_steps = 0
+
+    print('\n Start generator loop to predict:\n')
 
     for x,y,z in generator_xyz(): # y is a (n_tau,n_counts) array
         y_pred = model.predict(x) 
@@ -34,14 +44,14 @@ def evaluation(model):
             conf_dm_mat_old += h_dm_old
             
         count_steps += 1
-
-        if count_steps >= n_steps: break
+        if count_steps % 5000 == 0: print(count_steps)
+        if count_steps >= n_steps_test: break
     
     return conf_dm_mat, conf_dm_mat_old
 
 
 ### Accuracy calculation:
-def accuracy_calc(conf_dm_mat):
+def accuracy_calc(conf_dm_mat, old = False):
     ## Normalization of cond_dm_mat:
     conf_dm_mat_norm = conf_dm_mat
     for i in range(0,len(conf_dm_mat[0,:])):
@@ -50,17 +60,30 @@ def accuracy_calc(conf_dm_mat):
         if (summy != 0):
             conf_dm_mat_norm[i,:] = conf_dm_mat[i,:]/summy
 
-    # fig = plt.figure(figsize=(5,5))
-    # sns.heatmap(conf_dm_mat_norm, cmap='YlGnBu', annot=True, fmt="3.0f")
-    # plt.ylim(-0.5,23.5)
-    # plt.xlim(-0.5,23.5)
-    # plt.ylabel('True decay mode',fontsize = 16)
-    # plt.xlabel('Predicted decay mode',fontsize = 16)
+    x_axis_labels = ['$\pi^{\pm}$','$\pi^{\pm} + \pi^0$', '$\pi^{\pm} + 2\pi^0$', \
+                 '$\pi^{\pm} + 3\pi^0$','$3\pi^{\pm}$', '$3\pi^{\pm} + 1\pi^0$',\
+                 '$3\pi^{\pm} + 2\pi^0$', 'others'] # labels for x-axis
+    y_axis_labels = x_axis_labels # labels for y-axis
+
+    fig = plt.figure(figsize=(8,5))
+    plt.title("Decay modes")
+    sns.heatmap(conf_dm_mat_norm, xticklabels=x_axis_labels, yticklabels=y_axis_labels, cmap='YlGnBu', annot=True, fmt="3.2f")
+    plt.ylim(-0.5,9.5)
+    plt.xlim(-0.5,9.5)
+    if (old == False):
+        plt.ylabel('True',fontsize = 16)
+    else:
+        plt.ylabel('Default tau reconstruction',fontsize = 16)
+    plt.xlabel('Predicted',fontsize = 16)
+    plt.tight_layout()
     # plt.show()
-    # plt.close()
-    # pdf = pp.PdfPages("./Plots/conf_dm_mat_norm.pdf")
-    # pdf.savefig(fig)
-    # pdf.close()
+    if(old==False):
+        pdf = pp.PdfPages("../Plots/conf_dm_mat_norm.pdf")
+    else:
+        pdf = pp.PdfPages("../Plots/conf_dm_mat_norm_old.pdf")
+    pdf.savefig(fig)
+    pdf.close()
+    plt.close()
 
     ## Accuracy extraction for important decay modes:
     accuracy = np.zeros(7)

@@ -8,12 +8,20 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 100 # number of pf candidates per event
 n_fe     = 24  # total muber of features: 24
 n_counts = 2   # number of labels per event
-n_epoch  = 20  # number of epochs on which to train
-n_steps  = 20  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_epoch  = 3  # number of epochs on which to train
+n_steps_val   = 14213
+n_steps_test  = 63969  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start = 0
-entry_stop  = 100000 # total number of events in the dataset = 14'215'297
-entry_start_val = entry_stop+1
-entry_stop_val  = entry_stop + n_tau*n_steps + 1
+entry_stop  = 6396973 # total number of events in the dataset = 14'215'297
+# 45% = 6'396'973
+# 10% = 1'421'351 (approximative calculations have been rounded)
+entry_start_val  = entry_stop +1
+print('Entry_start_val:', entry_start_val)
+entry_stop_val   = entry_stop + n_tau*n_steps_val + 1
+print('Entry_stop_val: ',entry_stop_val)
+entry_start_test = entry_stop_val+1
+entry_stop_test  = entry_stop + n_tau*n_steps_test + 1
+print('Entry_stop_test (<= 14215297): ',entry_stop_test)
 
 class StdLayer(tf.keras.layers.Layer):
     def __init__(self, file_name, var_pos, n_sigmas, **kwargs):
@@ -73,24 +81,39 @@ class ScaleLayer(tf.keras.layers.Layer):
 
 
 class MyModel(tf.keras.Model):
-        def __init__(self, map_features):
-            super(MyModel, self).__init__()
-            self.normalize    = StdLayer('mean_std.txt', map_features, 5, name='std_layer')
-            self.scale        = ScaleLayer('min_max.txt', map_features, [-1,1], name='scale_layer')
-            self.flatten      = tf.keras.layers.Flatten() # flattens a ND array to a 2D array
-            self.input_layer  = tf.keras.layers.Dense(10) 
-            self.batch_norm   = tf.keras.layers.BatchNormalization() # default axis = -1, !!!! should I change it? !!!!!
-            self.layer_act    = tf.keras.layers.Activation('relu')
-            self.output_layer = tf.keras.layers.Dense(2) 
-        @tf.function
-        def call(self, x):
-            x = self.normalize(x)
-            x = self.scale(x)
-            x = self.flatten(x)
-            x = self.input_layer(x)
-            x = self.batch_norm(x)
-            x = self.layer_act(x)
-            return self.output_layer(x)
+    def __init__(self, map_features):
+        super(MyModel, self).__init__()
+        self.normalize    = StdLayer('mean_std.txt', map_features, 5, name='std_layer')
+        self.scale        = ScaleLayer('min_max.txt', map_features, [-1,1], name='scale_layer')
+        self.flatten      = tf.keras.layers.Flatten() # flattens a ND array to a 2D array
+
+        self.list_i = np.array([0,1,2,3,4,5,6,7,8,9])
+        self.dense = []
+        self.dropout_dense = []
+        self.batch_norm_dense = []
+        self.acti_dense = []
+        for i in self.list_i:
+            self.dense.append(tf.keras.layers.Dense(3600, name='dense_{}'.format(i)))
+            self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
+            self.acti_dense.append(tf.keras.layers.Activation('relu', name='acti_dense_{}'.format(i)))
+            self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
+        
+        self.output_layer = tf.keras.layers.Dense(2, name='output_layer') 
+        
+    @tf.function
+    def call(self, x):
+        x = self.normalize(x)
+        x = self.scale(x)
+        x = self.flatten(x)
+        for i in self.list_i:
+            x = self.dense[i](x)
+            x = self.batch_norm_dense[i](x)
+            x = self.acti_dense[i](x)
+            x = self.dropout_dense[i](x)
+        x = self.output_layer(x)
+        return x
+
+    
 
 
 #############################################################################################
