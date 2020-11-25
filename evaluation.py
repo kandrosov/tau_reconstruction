@@ -8,8 +8,22 @@ from mymodel import *
 
 def evaluation():
     print('\nStart evaluation, load model and generator:\n')
-    ### Reconstruct the model:
-    model = keras.models.load_model("../Models/my_model",compile=False,custom_objects = {'ScaleLayer': ScaleLayer,'StdLayer': StdLayer,'my_acc': my_acc,'CustomMSE': CustomMSE,'MyModel': MyModel})
+    ##### Reconstruct the model:
+    ### Load an empty model:
+    data_loader = R.DataLoader('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root', n_tau, entry_start, entry_stop)
+    map_features = data_loader.MapCreation()
+    model = MyModel(map_features) 
+    model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.001), loss=CustomMSE(), metrics=[my_acc])#,run_eagerly=True)
+
+    ### Load the last saved model:
+    with open('../Models/checkpoint','r') as f:
+        line = f.readline()
+        mymodelnumber = line.split()  
+    f.close()
+    a = mymodelnumber[1]
+    mymodelnumber = "../Models/"+a[1:-1]
+    ### Load the saved weights to the model:
+    model.load_weights(mymodelnumber) 
 
     ### Generator creation:
     generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)
@@ -21,7 +35,7 @@ def evaluation():
 
     print('\nStart generator loop to predict:\n')
 
-    for x,y,z in generator_xyz(): # y is a (n_tau,n_counts) array
+    for x,y,z in generator_xyz(): # y is a (n_tau,n_labels) array
         y_pred = model.predict(x) 
         yy     = np.concatenate((y, y_pred), axis = 1) # yy = (y_true_charged, y_true_neutral, y_pred_charged, y_pred_neutral)
 
@@ -33,7 +47,7 @@ def evaluation():
         h_dm = decay_mode_histo((y[:,0]-1)*5 + y[:,1], (y_pred[:,0]-1)*5 + y_pred[:,1], dm_bins)
 
         ### Decay mode comparison to old reconstruction:
-        h_dm_old = decay_mode_histo((y[:,0]-1)*5 + y[:,1], z, dm_bins)
+        h_dm_old = decay_mode_histo((y[:,0]-1)*5 + y[:,1], z[:,0], dm_bins)
 
         if conf_dm_mat is None:
             conf_dm_mat = h_dm

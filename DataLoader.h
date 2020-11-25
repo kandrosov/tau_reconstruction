@@ -55,7 +55,7 @@ string feature_names[29] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mas
     "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
     "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
     "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
-    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid ","pfCand_px","pfCand_py ","pfCand_pz ","pfCand_E "};
+    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E"};
 
 struct DataLoader {
 
@@ -72,7 +72,7 @@ struct DataLoader {
 
     static const size_t n_pf    = 100; // number of pf candidates per event
     static const size_t n_fe    = 29;  // number of featurese per pf candidate
-    static const size_t n_count = 2;   // chanrged and neutral particle count
+    static const size_t n_label = 6;   // chanrged and neutral particle label
 
     // Creation of map of features:
     std::map<std::string, int> MapCreation(){
@@ -87,16 +87,28 @@ struct DataLoader {
         return (current_entry + n_tau) <= end_dataset;
     }
     Data LoadNext(){
-        Data data(n_tau * n_pf * n_fe, n_tau * n_count, n_tau); // Creates an empty data structure
-
+        Data data(n_tau * n_pf * n_fe, n_tau * n_label, n_tau*(n_label-1)); // Creates an empty data structure
+        
         for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) { 
             tuple.GetEntry(current_entry); // get the entry of the current event
             const tau_tuple::Tau& tau = tuple(); // tau is out tree
+            
+            ///////////////////////////////////////////////////////////////////////
+            // Filling data.z:
+            auto get_z = [&](size_t label_ind) -> float& {
+                size_t index = GetIndex_z(tau_ind, label_ind);
+                return data.z.at(index);
+            };
+            data.z.at(0) = tau.tau_decayModeFindingNewDMs ? tau.tau_decayMode : -1; // end is the else
+            data.z.at(1) = tau.tau_pt;
+            data.z.at(2) = tau.tau_eta;
+            data.z.at(3) = tau.tau_phi;
+            data.z.at(4) = tau.tau_mass;
 
-            data.z.at(tau_ind) = tau.tau_decayModeFindingNewDMs ? tau.tau_decayMode : -1; // end is the else
+            ///////////////////////////////////////////////////////////////////////
             // Fill the labels:
-            auto get_y = [&](size_t count_ind) -> float& {
-                size_t index = GetIndex_y(tau_ind, count_ind);
+            auto get_y = [&](size_t label_ind) -> float& {
+                size_t index = GetIndex_y(tau_ind, label_ind);
                 return data.y.at(index);
             };
             get_y(0) = Count_charged_hadrons_true(tau.lepton_gen_vis_pdg);
@@ -110,8 +122,8 @@ struct DataLoader {
             std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
                 return tau.pfCand_pt.at(a) > tau.pfCand_pt.at(b);
             });
-            //////////////////////////////////////////////////////////////////////
-
+            
+            TLorentzVector gen_p4(0, 0, 0, 0); // 4-momentum vector
 
             for(size_t pf_ind = 0; pf_ind < indices.size(); ++pf_ind) {
                 
@@ -122,11 +134,12 @@ struct DataLoader {
                 
                 size_t pf_size = tau.pfCand_pt.size(); 
                 static constexpr float def_val = 0.f;
+                static constexpr float def_val_1 = 1.f;
                 size_t pf_ind_sorted = indices.at(pf_ind);
 
                 const bool has_trk_details = tau.pfCand_hasTrackDetails.at(pf_ind_sorted);
                 const bool dz_not_NaN = (std::isnormal(tau.pfCand_dz.at(pf_ind_sorted)) || tau.pfCand_dz.at(pf_ind_sorted) == 0);
-
+                
                 get_x(Feature::pfCand_pt)                   = tau.pfCand_pt.at(pf_ind_sorted);
                 get_x(Feature::pfCand_eta)                  = tau.pfCand_eta.at(pf_ind_sorted);
                 get_x(Feature::pfCand_phi)                  = tau.pfCand_phi.at(pf_ind_sorted);
@@ -147,7 +160,7 @@ struct DataLoader {
                 get_x(Feature::pfCand_hcalFraction)         = tau.pfCand_hcalFraction.at(pf_ind_sorted);
                 get_x(Feature::pfCand_rawCaloFraction)      = tau.pfCand_rawCaloFraction.at(pf_ind_sorted);
                 get_x(Feature::pfCand_rawHcalFraction)      = tau.pfCand_rawHcalFraction.at(pf_ind_sorted);
-                get_x(Feature::pfCand_valid)                = 1;
+                get_x(Feature::pfCand_valid)                = def_val_1;
                 
                 TLorentzVector v;
                 v.SetPtEtaPhiM(tau.pfCand_pt.at(pf_ind_sorted), tau.pfCand_eta.at(pf_ind_sorted),tau.pfCand_phi.at(pf_ind_sorted),tau.pfCand_mass.at(pf_ind_sorted));
@@ -160,10 +173,23 @@ struct DataLoader {
                 get_x(Feature::pfCand_dz_error)             = has_trk_details ? tau.pfCand_dz_error.at(pf_ind_sorted)      : def_val;
                 get_x(Feature::pfCand_track_chi2)           = has_trk_details ? tau.pfCand_track_chi2.at(pf_ind_sorted)    : def_val;
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
+                
+                //////////////////////////////////////////////////////////////////////
+                ////// 4-momentum part:
+                if(pf_ind < tau.lepton_gen_vis_pt.size()){
+                    TLorentzVector v1;
+                    v1.SetPtEtaPhiM(tau.lepton_gen_vis_pt.at(pf_ind) , tau.lepton_gen_vis_eta.at(pf_ind),
+                                    tau.lepton_gen_vis_phi.at(pf_ind),tau.lepton_gen_vis_mass.at(pf_ind));
+                    gen_p4 += v1;
+                }
             }
             if(current_entry == end_dataset){
                 tau_ind = n_tau;
             }
+            get_y(2) = gen_p4.Pt();
+            get_y(3) = gen_p4.Eta();
+            get_y(4) = gen_p4.Phi();
+            get_y(5) = gen_p4.M()*gen_p4.M();
         }
         return data;
     }
@@ -191,11 +217,17 @@ struct DataLoader {
     }
 
     // This function calculates the corresponding index in a 1D array: 
-    // feed a = b.reshape(n_tau,n_count)
-    size_t GetIndex_y(size_t _tau_ind, size_t _count_ind) const {
-        size_t part_count_direction = _count_ind;
-        size_t part_tau_direction   = n_count*_tau_ind;
-        return part_count_direction + part_tau_direction;
+    // feed a = b.reshape(n_tau,n_label)
+    size_t GetIndex_y(size_t _tau_ind, size_t _label_ind) const {
+        size_t part_label_direction = _label_ind;
+        size_t part_tau_direction   = n_label*_tau_ind;
+        return part_label_direction + part_tau_direction;
+    }
+
+    size_t GetIndex_z(size_t _tau_ind, size_t _label_ind) const {
+        size_t part_label_direction = _label_ind;
+        size_t part_tau_direction   = (n_label-1)*_tau_ind;
+        return part_label_direction + part_tau_direction;
     }
 
     // Function that counts the true values for the number of charged hadrons for the event:

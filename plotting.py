@@ -16,7 +16,7 @@ def plot_metrics(history):
     loss     = hist["loss"]
     acc      = hist["my_acc"]
     loss_val = hist["val_loss"] 
-    acc_val  = hist["val_acc"]
+    acc_val  = hist["val_my_acc"]
 
     fig0, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
     fig0.suptitle('Metrics')

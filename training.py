@@ -16,18 +16,16 @@ def training():
     ### Generator creation:
     generator, n_batches         = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start, entry_stop)
     
-    print('\nCompilation fo model:\n')
-    model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.001), loss=CustomMSE(), metrics=[my_acc])
+    print('\nCompilation of model:\n')
+    model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.001), loss=CustomMSE(), metrics=[my_acc,my_resolution])#,run_eagerly=True)
 
     print('\nModel is fit:\n')
     history = model.fit(x = tf.data.Dataset.from_generator(generator,(tf.float32, tf.float32),\
-                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,n_counts]))),\
+                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,n_labels]))),\
                             epochs = n_epoch, steps_per_epoch = n_batches, callbacks=[ValidationCallback(),callbacks])
     
     model.build((n_tau, n_pf, n_fe))
     model.summary()
-
-    model.save("../Models/my_model") 
 
     print('\nFinished model running:\n')
 
