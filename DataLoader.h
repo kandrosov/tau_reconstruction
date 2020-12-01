@@ -24,8 +24,8 @@ enum class Feature {
     pfCand_eta                  = 1,
     pfCand_phi                  = 2,
     pfCand_mass                 = 3,
-    pfCand_pdgId                = 4,
-    pfCand_charge               = 5,
+    pfCand_charge               = 4,
+    pfCand_pdgId                = 5,
     pfCand_pvAssociationQuality = 6,
     pfCand_fromPV               = 7,
     pfCand_puppiWeight          = 8, 
@@ -51,11 +51,13 @@ enum class Feature {
     pfCand_E                    = 28,
 };
 
-string feature_names[29] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_pdgId", "pfCand_charge", 
+string feature_names[29] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
     "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
     "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
     "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
     "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E"};
+
+string y_label_names[6] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt", "eta", "phi", "m^2"};
 
 struct DataLoader {
 
@@ -83,6 +85,14 @@ struct DataLoader {
         return mapOfFeatures;
     }
 
+    std::map<std::string, int> MapCreationy(){
+        std::map<std::string, int> mapOfy;
+        for(size_t i = 0; i <= 5; ++i){
+            mapOfy[y_label_names[i]] = i;
+        }
+        return mapOfy;
+    }
+
     bool HasNext() {     
         return (current_entry + n_tau) <= end_dataset;
     }
@@ -99,11 +109,13 @@ struct DataLoader {
                 size_t index = GetIndex_z(tau_ind, label_ind);
                 return data.z.at(index);
             };
-            data.z.at(0) = tau.tau_decayModeFindingNewDMs ? tau.tau_decayMode : -1; // end is the else
-            data.z.at(1) = tau.tau_pt;
-            data.z.at(2) = tau.tau_eta;
-            data.z.at(3) = tau.tau_phi;
-            data.z.at(4) = tau.tau_mass;
+
+            const bool def_bool = (tau.tau_decayModeFindingNewDMs > 0 && tau.tau_index >= 0);
+            get_z(0) = def_bool ? tau.tau_decayMode : -1; 
+            get_z(1) = def_bool ? tau.tau_pt   : 10000.0;
+            get_z(2) = def_bool ? tau.tau_eta  : 10.0;
+            get_z(3) = def_bool ? tau.tau_phi  : 10.0;
+            get_z(4) = def_bool ? tau.tau_mass : 10000.0;
 
             ///////////////////////////////////////////////////////////////////////
             // Fill the labels:

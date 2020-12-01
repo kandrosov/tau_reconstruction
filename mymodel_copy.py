@@ -13,10 +13,10 @@ n_pf     = 100  # number of pf candidates per event
 n_fe     = 29   # total muber of features: 24
 n_labels = 6    # number of labels per event
 n_epoch  = 10 #100  # number of epochs on which to train
-n_steps_val   = 14213
-n_steps_test  = 63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_steps_val   = 300#14213
+n_steps_test  = 10000#63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 6396973 # total number of events in the dataset = 14'215'297
+entry_stop    = 10000#6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -241,7 +241,7 @@ class MyResolution(tf.keras.metrics.Metric):
         # tf.print('Sum_x: ',self.sum_x)
         mean_x  = self.sum_x/self.N
         mean_x2 = self.sum_x2/self.N
-        return mean_x2 -  mean_x
+        return mean_x2 -  mean_x**2
 
     def reset(self):
         self.sum_x.assign(0.)
@@ -262,10 +262,10 @@ class MyResolution(tf.keras.metrics.Metric):
         raise RuntimeError("Im here")
         return MyResolution(config["name"], config["var_pos"], is_relative=config["is_relative"])
 
-pt_res_obj  = MyResolution('pt_res', 2  ,True)
-eta_res_obj = MyResolution('eta_res', 3 ,True)
-phi_res_obj = MyResolution('phi_res', 4 ,True)
-m2_res_obj  = MyResolution('m^2_res', 5 ,True)
+pt_res_obj  = MyResolution('pt_res',  2,True)
+eta_res_obj = MyResolution('eta_res', 3,False)
+phi_res_obj = MyResolution('phi_res', 4,False)
+m2_res_obj  = MyResolution('m^2_res', 5,False)
 
 def pt_res(y_true, y_pred, sample_weight=None):
     # print('\npt_res calculation:')
