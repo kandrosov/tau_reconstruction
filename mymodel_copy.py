@@ -5,18 +5,19 @@ from tensorflow import keras
 import json
 from ROOT import TLorentzVector
 import math
+# import spektral
 # import matplotlib.pyplot as plt
 
 ### All the parameters:
-n_tau    = 100 #100 # number of taus (or events) per batch
-n_pf     = 100  # number of pf candidates per event
-n_fe     = 29   # total muber of features: 24
+n_tau    = 100 # number of taus (or events) per batch
+n_pf     = 100 #100 # number of pf candidates per event
+n_fe     = 29#31   # total muber of features: 24
 n_labels = 6    # number of labels per event
-n_epoch  = 10 #100  # number of epochs on which to train
-n_steps_val   = 300#14213
-n_steps_test  = 10000#63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_epoch  = 1 #100  # number of epochs on which to train
+n_steps_val   = 14213
+n_steps_test  = 63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 10000#6396973 # total number of events in the dataset = 14'215'297
+entry_stop    = 6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -85,7 +86,6 @@ class ScaleLayer(tf.keras.layers.Layer):
         Y = tf.clip_by_value( (self.y * ( X - self.vars_min))  + self.a , self.a, self.b)
         return tf.where(self.vars_apply, Y, X)
 
-
 class MyModel(tf.keras.Model):
     def __init__(self, map_features, **kwargs):
         super(MyModel, self).__init__(**kwargs)
@@ -138,6 +138,8 @@ class MyModel(tf.keras.Model):
             x = self.dropout_dense[i](x)
         x2   = self.output_layer_2(x)
         x100 = self.output_layer_100(x)
+        print('x100.shape: ', x100.shape)
+        print('x2.shape: ', x2.shape)
 
         ### 4-momentum:
         mypxs  = xx[:,:,self.px_index] * x100 * xx[:,:,self.valid_index]
@@ -173,7 +175,160 @@ class MyModel(tf.keras.Model):
 
         return xout
 
- 
+
+# create a tensor with the closest pfCands and their features
+def select_cand(_x, _res, k = 11):
+    
+    # ind = tf.reshape(_res,(n_tau,k))
+    # _s = tf.gather(_x, ind, axis = 1)
+    # print('_s: ',_s.shape)
+
+    _sss = _x[:,:,:]
+    for i in range(0,n_tau):
+        _s = tf.gather(_x[i,:,:],_res[i,:],axis=0)
+        if(i%2==0):
+            _ss = _s
+        else:
+            _ss = tf.stack((_ss,_s),axis = 0)
+            if(i == 1):
+                _sss = _ss
+            else:
+                _sss = tf.concat((_sss,_ss),axis = 0)
+
+    return _sss
+
+
+class MyGNN(tf.keras.Model):
+
+    def __init__(self, map_features, **kwargs):
+        super(MyGNN, self).__init__(**kwargs)
+        self.px_index     = map_features["pfCand_px"] 
+        self.py_index     = map_features["pfCand_py"] 
+        self.pz_index     = map_features["pfCand_pz"]
+        self.E_index      = map_features["pfCand_E"] 
+        self.valid_index  = map_features["pfCand_valid"]
+        self.map_features = map_features
+
+        self.embedding1   = tf.keras.layers.Embedding(350,2)
+        self.embedding2   = tf.keras.layers.Embedding(4  ,2)
+        self.embedding3   = tf.keras.layers.Embedding(8  ,2)
+        self.normalize    = StdLayer('mean_std.txt', map_features, 5, name='std_layer')
+        self.scale        = ScaleLayer('min_max.txt', map_features, [-1,1], name='scale_layer')
+        self.flatten      = tf.keras.layers.Flatten() # flattens a ND array to a 2D array
+
+        self.n_layers = 5 #10
+        self.dense = []
+        self.dropout_dense = []
+        self.batch_norm_dense = []
+        self.acti_dense = []
+        
+        for i in range(0,self.n_layers):
+            self.dense.append(tf.keras.layers.Dense(3600, name='dense_{}'.format(i)))
+            self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
+            self.acti_dense.append(tf.keras.layers.Activation('relu', name='acti_dense_{}'.format(i)))
+            self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
+        
+        self.output_layer_2   = tf.keras.layers.Dense(2  , name='output_layer_2') 
+        self.output_layer_100 = tf.keras.layers.Dense(100, name='output_layer_100', activation='softmax') 
+
+        self.coord_2D = tf.keras.layers.Dense(2  , name='coord_2D') 
+
+    # @tf.function
+    def call(self, xx):
+        x_em1 = self.embedding1(tf.abs(xx[:,:,self.map_features['pfCand_pdgId']]))
+        x_em2 = self.embedding2(tf.abs(xx[:,:,self.map_features['pfCand_fromPV']]))
+        x_em3 = self.embedding3(tf.abs(xx[:,:,self.map_features['pfCand_pvAssociationQuality']]))
+        x = self.normalize(xx)
+        x = self.scale(x)
+
+        x_part1 = x[:,:,:self.map_features['pfCand_pdgId']]
+        x_part2 = x[:,:,(self.map_features["pfCand_fromPV"]+1):]
+        x = tf.concat((x_em1,x_em2,x_em3,x_part1,x_part2),axis = 2)
+        # print('x.shape 1: ', x.shape)
+
+        
+        for pf_ind in range(0,n_pf):
+            if(pf_ind == 0):
+                x_shape = tf.shape(x[:,:,self.map_features['pfCand_rel_eta']])
+                diff_eta_1 = tf.reshape(x[:,pf_ind,self.map_features['pfCand_rel_eta']],(x_shape[0],1))
+                diff_eta = x[:,:,self.map_features['pfCand_rel_eta']]-diff_eta_1
+                diff_phi_1 = tf.reshape(x[:,pf_ind,self.map_features['pfCand_rel_phi']],(x_shape[0],1))
+                diff_phi = x[:,:,self.map_features['pfCand_rel_phi']]-diff_phi_1
+            else:
+                diff_eta_1 = tf.reshape(c2[:,pf_ind,0],(x_shape[0],1))
+                diff_eta = c2[:,:,0]-diff_eta_1
+                diff_phi_1 = tf.reshape(c2[:,pf_ind,1],(x_shape[0],1))
+                diff_phi = c2[:,:,0]-diff_phi_1
+            diff_eta = tf.math.square(diff_eta)
+            diff_phi = tf.math.square(diff_phi)
+            dist = tf.math.sqrt( diff_eta + diff_phi )
+            # print('dist.shape: ', dist.shape)
+            top_probs, res = tf.math.top_k(-dist, k = 11) # finds the neighbours of the pfcand
+            # print('res.shape: ',res.shape) # (n_tau, 11)
+            # print(res)
+            s = select_cand(x, res) # creates s with pfcand and its 10 neighbours
+            # print('s.shape beginning 1: ',s.shape) # s.shape should be (11,31-3+3*2=34)
+            s = self.flatten(s)
+            # print('s.shape beginning 2: ',s.shape)
+            for i in range(0,self.n_layers):
+                s = self.dense[i](s)
+                s = self.batch_norm_dense[i](s)
+                s = self.acti_dense[i](s)
+                s = self.dropout_dense[i](s)
+            c2 = self.coord_2D(s) # not good has shape (6,2) not (6,100,2)
+            print('c2.shape ending: ',c2.shape) # s.shape should be (1,35)
+
+
+        ## Extract the closest particles in a distance 0.5?
+        r = 1.5
+        distance = tf.math.sqrt(  tf.math.square(x[:,:,self.map_features['pfCand_rel_eta']]) \
+                                + tf.math.square(x[:,:,self.map_features['pfCand_rel_phi']]) )
+        good_bool_1 = tf.math.greater(-distance, -r) 
+        good_bool = tf.math.logical_and(good_bool_1,distance != 0)
+        good_ones = tf.where(good_bool, 1, 0)
+        print('good_ones.shape: ',good_ones.shape)
+        print('good_ones: ',good_ones)
+
+        ### End GNN part
+
+        x2   = self.output_layer_2(x)
+        x100 = self.output_layer_100(x)
+
+        ### 4-momentum:
+        mypxs  = xx[:,:,self.px_index] * x100 * xx[:,:,self.valid_index]
+        mypys  = xx[:,:,self.py_index] * x100 * xx[:,:,self.valid_index]
+        mypzs  = xx[:,:,self.pz_index] * x100 * xx[:,:,self.valid_index]
+        myEs   = xx[:,:,self.E_index]  * x100 * xx[:,:,self.valid_index]
+
+        mypx   = tf.reduce_sum(mypxs, axis = 1)
+        mypy   = tf.reduce_sum(mypys, axis = 1)
+        mypz   = tf.reduce_sum(mypzs, axis = 1)
+        myE    = tf.reduce_sum(myEs , axis = 1)
+
+        mypx2  = tf.square(mypx)
+        mypy2  = tf.square(mypy)
+        mypz2  = tf.square(mypz)
+
+        mypt   = tf.sqrt(mypx2 + mypy2)
+        mymass = tf.square(myE) - mypx2 - mypy2 - mypz2
+        absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
+
+        ### for myeta and myphi:
+        myphi = mypt*0.0
+        myeta = mypt*0.0
+
+        cosTheta = tf.where(absp==0, 1.0, mypz/absp)
+        myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
+        myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
+
+        xx20 = x2[:,0] # is needed doesn't like direct input
+        xx21 = x2[:,1]
+
+        xout = tf.stack([xx20,xx21,mypt,myeta,myphi,mymass], axis=1)
+
+        return xout 
+
+
 ### Function that creates generators:
 def make_generator(file_name, entry_begin, entry_end, z = False):
     _data_loader = R.DataLoader(file_name, n_tau, entry_begin, entry_end)
@@ -214,7 +369,6 @@ def my_acc(y_true, y_pred):
     y_pred_int = tf.cast(y_pred, tf.int32)
     result = tf.math.logical_and(y_true_int[:, 0] == y_pred_int[:, 0], y_true_int[:, 1] == y_pred_int[:, 1])
     return tf.cast(result, tf.float32)
-
 
 
 ### Resolution of 4-momentum:
@@ -262,10 +416,10 @@ class MyResolution(tf.keras.metrics.Metric):
         raise RuntimeError("Im here")
         return MyResolution(config["name"], config["var_pos"], is_relative=config["is_relative"])
 
-pt_res_obj  = MyResolution('pt_res',  2,True)
-eta_res_obj = MyResolution('eta_res', 3,False)
-phi_res_obj = MyResolution('phi_res', 4,False)
-m2_res_obj  = MyResolution('m^2_res', 5,False)
+pt_res_obj  = MyResolution('pt_res' , 2 ,True)
+eta_res_obj = MyResolution('eta_res', 3 ,False)
+phi_res_obj = MyResolution('phi_res', 4 ,False)
+m2_res_obj  = MyResolution('m^2_res', 5 ,False)
 
 def pt_res(y_true, y_pred, sample_weight=None):
     # print('\npt_res calculation:')
@@ -347,13 +501,9 @@ class ValidationCallback(tf.keras.callbacks.Callback):
                 cnt += 1
         # print('Validation finished.')
         ### Save the entire models:
-        self.model.save("/data/cedrine/Models0/my_model_{}".format(epoch+1),save_format='tf')
+        self.model.save("/data/cedrine/ModelTest/my_model_{}".format(epoch+1),save_format='tf')
         print('Model is saved.')
-        
-
-
-   
-        
+         
 
 callbacks = [
     tf.keras.callbacks.EarlyStopping(
@@ -366,7 +516,7 @@ callbacks = [
         restore_best_weights = False,
     ),
     tf.keras.callbacks.CSVLogger(
-        filename  = '/data/cedrine/Models0/log0.csv', 
+        filename  = '/data/cedrine/ModelTest/log0.csv', 
         separator = ',', 
         append    = False,
     )

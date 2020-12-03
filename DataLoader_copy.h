@@ -49,16 +49,16 @@ enum class Feature {
     pfCand_py                   = 26,
     pfCand_pz                   = 27,
     pfCand_E                    = 28,
-    pfCand_rel_eta              = 29,
-    pfCand_rel_phi              = 30,
+    // pfCand_rel_eta              = 29,
+    // pfCand_rel_phi              = 30,
 };
 
-string feature_names[31] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
+string feature_names[29] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
     "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
     "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
     "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
-    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E",
-    "pfCand_rel_eta","pfCand_rel_phi"};
+    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E"};//,
+    //"pfCand_rel_eta","pfCand_rel_phi"};
 
 string y_label_names[6] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt", "eta", "phi", "m^2"};
 
@@ -76,13 +76,13 @@ struct DataLoader {
     Long64_t current_entry; // number of the current entry
 
     static const size_t n_pf    = 100; // number of pf candidates per event
-    static const size_t n_fe    = 31;  // number of featurese per pf candidate
+    static const size_t n_fe    = 29;  // number of featurese per pf candidate
     static const size_t n_label = 6;   // chanrged and neutral particle label
 
     // Creation of map of features:
     std::map<std::string, int> MapCreation(){
         std::map<std::string, int> mapOfFeatures;
-        for(size_t i = 0; i <= 30; ++i){
+        for(size_t i = 0; i <= 28; ++i){
             mapOfFeatures[feature_names[i]] = i;
         }
         return mapOfFeatures;
@@ -189,8 +189,8 @@ struct DataLoader {
                 get_x(Feature::pfCand_track_chi2)           = has_trk_details ? tau.pfCand_track_chi2.at(pf_ind_sorted)    : def_val;
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
                 
-                get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
-                get_x(Feature::pfCand_rel_phi)             = tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi;
+                // get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
+                // get_x(Feature::pfCand_rel_phi)             = tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi;
 
                 //////////////////////////////////////////////////////////////////////
                 ////// 4-momentum part:

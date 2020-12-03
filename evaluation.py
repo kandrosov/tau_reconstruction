@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
 
-from mymodel_copy import *
+from mymodel import *
 from plotting import plot_res
 
 def make_sqrt(m):
@@ -25,7 +25,7 @@ def evaluation():
         "phi_res": phi_res,
         "m2_res" : m2_res,
     }
-    model = tf.keras.models.load_model("/data/cedrine/Models0/my_model_{}".format(2), custom_objects=custom_objects, compile=True)
+    model = tf.keras.models.load_model("/data/cedrine/ModelTest/my_model_{}".format(1), custom_objects=custom_objects, compile=True)
     print("Model loaded.")
 
     generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)

@@ -5,7 +5,7 @@ if gpus:
   try:
     tf.config.experimental.set_virtual_device_configuration(
         gpus[0],
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=3000)]) # => uses effectively 5367 MB
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8000)]) # => uses effectively 5367 MB
     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:
@@ -19,7 +19,7 @@ import numpy as np
 R.gInterpreter.ProcessLine('#include "DataLoader.h"')
 
 from training import training
-from mymodel_copy import * 
+from mymodel import * 
 from plotting import plot_metrics, plt_conf_dm, accuracy_calc
 from evaluation import evaluation
 

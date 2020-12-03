@@ -5,18 +5,19 @@ from tensorflow import keras
 import json
 from ROOT import TLorentzVector
 import math
+# import spektral
 # import matplotlib.pyplot as plt
 
 ### All the parameters:
-n_tau    = 100 #100 # number of taus (or events) per batch
-n_pf     = 100  # number of pf candidates per event
-n_fe     = 29   # total muber of features: 24
+n_tau    = 100 # number of taus (or events) per batch
+n_pf     = 100 #100 # number of pf candidates per event
+n_fe     = 31   # total muber of features: 24
 n_labels = 6    # number of labels per event
-n_epoch  = 10 #100  # number of epochs on which to train
-n_steps_val   = 14213
-n_steps_test  = 63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_epoch  = 5 #100  # number of epochs on which to train
+n_steps_val   = 10 #14213
+n_steps_test  = 100 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 6396973 # total number of events in the dataset = 14'215'297
+entry_stop    = 10000 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -26,7 +27,6 @@ print('Entry_stop_val: ',entry_stop_val)
 entry_start_test = entry_stop_val+1
 entry_stop_test  = entry_stop_val + n_tau*n_steps_test + 1
 print('Entry_stop_test (<= 14215297): ',entry_stop_test)
-
 
 
 class StdLayer(tf.keras.layers.Layer):
@@ -85,7 +85,6 @@ class ScaleLayer(tf.keras.layers.Layer):
         Y = tf.clip_by_value( (self.y * ( X - self.vars_min))  + self.a , self.a, self.b)
         return tf.where(self.vars_apply, Y, X)
 
-
 class MyModel(tf.keras.Model):
     def __init__(self, map_features, **kwargs):
         super(MyModel, self).__init__(**kwargs)
@@ -138,6 +137,8 @@ class MyModel(tf.keras.Model):
             x = self.dropout_dense[i](x)
         x2   = self.output_layer_2(x)
         x100 = self.output_layer_100(x)
+        print('x100.shape: ', x100.shape)
+        print('x2.shape: ', x2.shape)
 
         ### 4-momentum:
         mypxs  = xx[:,:,self.px_index] * x100 * xx[:,:,self.valid_index]
@@ -173,7 +174,158 @@ class MyModel(tf.keras.Model):
 
         return xout
 
- 
+class MyGNNLayer(tf.keras.layers.Layer):
+    def __init__(self, n_dim, k_nearest, num_outputs, **kwargs):
+        super(MyGNNLayer, self).__init__(**kwargs)
+        self.n_dim        = n_dim
+        self.k_nearest    = k_nearest
+        self.num_outputs  = tf.constant(num_outputs, dtype=tf.int32)
+        self.flatten      = tf.keras.layers.Flatten()
+
+    def build(self, input_shape):
+        self.A = self.add_weight("A", shape=((input_shape[-1]) * self.k_nearest, self.num_outputs),
+                                initializer=tf.keras.initializers.HeUniform, trainable=True)
+        self.b = self.add_weight("b", shape=(self.num_outputs,), initializer=tf.keras.initializers.HeUniform, trainable=True)
+
+    def next_iter(self, x, final_output, pf_ind):
+            c = tf.stack((x[:,:,-2],x[:,:,-1]), axis = 2)
+            x_shape = tf.shape(c)
+
+            diff_1 = tf.reshape(c[:,pf_ind,:],(x_shape[0],1,2))
+            diff = c-diff_1
+            diff = tf.math.square(diff)
+            dist = tf.math.reduce_sum(diff, axis = 2)
+
+            _, res = tf.math.top_k(- dist, k = self.k_nearest) # finds the closest neighbours of the current pfcand
+            s = tf.gather(x, res, axis = 1, batch_dims = 1)
+
+            s = self.flatten(s)
+
+            output = tf.matmul(s, self.A) + self.b
+
+            output = tf.reshape(output, (x_shape[0], 1, self.num_outputs))
+
+            
+            #final_output[:, pf_ind, :] = output #.append()
+            return [pf_ind + 1, tf.concat([final_output, output], axis=1)]
+
+    @tf.function
+    def call(self, x):
+        final_outputs = []
+        x_shape = tf.shape(x)
+        n_pf_cand = x_shape[1]
+        i = tf.constant(0)
+
+        output = tf.zeros([x_shape[0], 0, self.num_outputs])
+
+        condition = lambda i, output: i < n_pf_cand
+        body = lambda i, output: self.next_iter(x, output, i)
+
+        i, output = tf.while_loop(condition, body, [i, output],
+            shape_invariants=[i.get_shape(), tf.TensorShape([None, None, self.num_outputs])])
+
+        return output
+
+
+
+class MyGNN(tf.keras.Model):
+
+    def __init__(self, map_features, **kwargs):
+        super(MyGNN, self).__init__(**kwargs)
+        self.px_index     = map_features["pfCand_px"] 
+        self.py_index     = map_features["pfCand_py"] 
+        self.pz_index     = map_features["pfCand_pz"]
+        self.E_index      = map_features["pfCand_E"] 
+        self.valid_index  = map_features["pfCand_valid"]
+        self.map_features = map_features
+
+        self.embedding1   = tf.keras.layers.Embedding(350,2)
+        self.embedding2   = tf.keras.layers.Embedding(4  ,2)
+        self.embedding3   = tf.keras.layers.Embedding(8  ,2)
+        self.normalize    = StdLayer('mean_std.txt', map_features, 5, name='std_layer')
+        self.scale        = ScaleLayer('min_max.txt', map_features, [-1,1], name='scale_layer')
+
+        self.GNN_layers = []
+        self.dropout_dense = []
+        self.batch_norm_dense = []
+        self.acti_dense = []
+        
+        list_outputs = [100, 100, 100, 100, 100, 4]
+        self.n_layers = len(list_outputs)
+        for i in range(0,self.n_layers):
+            self.GNN_layers.append(MyGNNLayer(n_dim=2, k_nearest=10, num_outputs=list_outputs[i] , name='GNN_layer_{}'.format(i)))
+            self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
+            self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
+            if i != self.n_layers - 1:
+                self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
+         
+
+
+    @tf.function
+    def call(self, xx):
+        x_em1 = self.embedding1(tf.abs(xx[:,:,self.map_features['pfCand_pdgId']]))
+        x_em2 = self.embedding2(tf.abs(xx[:,:,self.map_features['pfCand_fromPV']]))
+        x_em3 = self.embedding3(tf.abs(xx[:,:,self.map_features['pfCand_pvAssociationQuality']]))
+        x = self.normalize(xx)
+        x = self.scale(x)
+
+        x_part1 = x[:,:,:self.map_features['pfCand_pdgId']]
+        x_part2 = x[:,:,(self.map_features["pfCand_fromPV"]+1):]
+        x = tf.concat((x_em1,x_em2,x_em3,x_part1,x_part2),axis = 2)
+
+        for i in range(0,self.n_layers):
+            x = self.GNN_layers[i](x)
+            x = self.batch_norm_dense[i](x)
+            x = self.acti_dense[i](x)
+            if i != self.n_layers - 1:
+                x = self.dropout_dense[i](x)
+        # print('x.shape check: ', x.shape) # (n_tau, 100, 4)
+
+
+        ##### Particles closest to 0?
+        distance = tf.math.sqrt(tf.math.square(x[:,:,-2]) + tf.math.square(x[:,:,-1]))
+        # print('distance.shape: ', distance.shape) #(n_tau, n_pf)
+
+        sf = 1 - distance
+
+
+        ### 4-momentum:
+        mypxs  = xx[:,:,self.px_index] * sf * xx[:,:,self.valid_index]
+        mypys  = xx[:,:,self.py_index] * sf * xx[:,:,self.valid_index]
+        mypzs  = xx[:,:,self.pz_index] * sf * xx[:,:,self.valid_index]
+        myEs   = xx[:,:,self.E_index]  * sf * xx[:,:,self.valid_index]
+
+        mypx   = tf.reduce_sum(mypxs, axis = 1)
+        mypy   = tf.reduce_sum(mypys, axis = 1)
+        mypz   = tf.reduce_sum(mypzs, axis = 1)
+        myE    = tf.reduce_sum(myEs , axis = 1)
+
+        mypx2  = tf.square(mypx)
+        mypy2  = tf.square(mypy)
+        mypz2  = tf.square(mypz)
+
+        mypt   = tf.sqrt(mypx2 + mypy2)
+        mymass = tf.square(myE) - mypx2 - mypy2 - mypz2
+        absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
+
+        ### for myeta and myphi:
+        myphi = mypt*0.0
+        myeta = mypt*0.0
+
+        cosTheta = tf.where(absp==0, 1.0, mypz/absp)
+        myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
+        myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
+
+        ### charged and neutral number of hadrons
+        mycharged = tf.math.reduce_sum(x[:,:,0] * sf * x[:,:,0], axis = 1)
+        myneurals = tf.math.reduce_sum(x[:,:,1] * sf * x[:,:,1], axis = 1)
+
+        # xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
+        xout = tf.stack([mycharged,myneurals], axis=1)
+
+        return xout 
+
+
 ### Function that creates generators:
 def make_generator(file_name, entry_begin, entry_end, z = False):
     _data_loader = R.DataLoader(file_name, n_tau, entry_begin, entry_end)
@@ -194,7 +346,7 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
                     z_2d = z_np.reshape((n_tau, n_labels-1))
                     yield x_3d, y_2d, z_2d
                 else:
-                    yield x_3d, y_2d
+                    yield x_3d, y_2d[:, 0:2]
             ++cnt
             if cnt == 100: 
                 gc.collect() # garbage collection to improve preformance
@@ -214,7 +366,6 @@ def my_acc(y_true, y_pred):
     y_pred_int = tf.cast(y_pred, tf.int32)
     result = tf.math.logical_and(y_true_int[:, 0] == y_pred_int[:, 0], y_true_int[:, 1] == y_pred_int[:, 1])
     return tf.cast(result, tf.float32)
-
 
 
 ### Resolution of 4-momentum:
@@ -241,7 +392,7 @@ class MyResolution(tf.keras.metrics.Metric):
         # tf.print('Sum_x: ',self.sum_x)
         mean_x  = self.sum_x/self.N
         mean_x2 = self.sum_x2/self.N
-        return mean_x2 -  mean_x
+        return mean_x2 -  mean_x**2
 
     def reset(self):
         self.sum_x.assign(0.)
@@ -262,10 +413,10 @@ class MyResolution(tf.keras.metrics.Metric):
         raise RuntimeError("Im here")
         return MyResolution(config["name"], config["var_pos"], is_relative=config["is_relative"])
 
-pt_res_obj  = MyResolution('pt_res', 2  ,True)
-eta_res_obj = MyResolution('eta_res', 3 ,True)
-phi_res_obj = MyResolution('phi_res', 4 ,True)
-m2_res_obj  = MyResolution('m^2_res', 5 ,True)
+pt_res_obj  = MyResolution('pt_res' , 2 ,True)
+eta_res_obj = MyResolution('eta_res', 3 ,False)
+phi_res_obj = MyResolution('phi_res', 4 ,False)
+m2_res_obj  = MyResolution('m^2_res', 5 ,False)
 
 def pt_res(y_true, y_pred, sample_weight=None):
     # print('\npt_res calculation:')
@@ -310,11 +461,11 @@ class CustomMSE(keras.losses.Loss):
         w = [1., 1, 1, 1, 1, 1]
         mse1 = tf.math.reduce_mean(tf.square(y_true[:,0] - y_pred[:,0]))
         mse2 = tf.math.reduce_mean(tf.square(y_true[:,1] - y_pred[:,1]))
-        mse3 = tf.math.reduce_mean(tf.square(y_true[:,2] - y_pred[:,2]))
-        mse4 = tf.math.reduce_mean(tf.square(y_true[:,3] - y_pred[:,3]))
-        mse5 = tf.math.reduce_mean(tf.square(y_true[:,4] - y_pred[:,4]))
-        mse6 = tf.math.reduce_mean(tf.square(y_true[:,5] - y_pred[:,5]))
-        return w[0]*mse1 + w[1]*mse2 + w[2]*mse3 + w[3]*mse4 + w[4]*mse5 + w[5]*mse6
+        # mse3 = tf.math.reduce_mean(tf.square(y_true[:,2] - y_pred[:,2]))
+        # mse4 = tf.math.reduce_mean(tf.square(y_true[:,3] - y_pred[:,3]))
+        # mse5 = tf.math.reduce_mean(tf.square(y_true[:,4] - y_pred[:,4]))
+        # mse6 = tf.math.reduce_mean(tf.square(y_true[:,5] - y_pred[:,5]))
+        return w[0]*mse1 + w[1]*mse2 #+ w[2]*mse3 + w[3]*mse4 + w[4]*mse5 + w[5]*mse6
 
 
 class ValidationCallback(tf.keras.callbacks.Callback):
@@ -347,13 +498,9 @@ class ValidationCallback(tf.keras.callbacks.Callback):
                 cnt += 1
         # print('Validation finished.')
         ### Save the entire models:
-        self.model.save("/data/cedrine/Models0/my_model_{}".format(epoch+1),save_format='tf')
+        self.model.save("/data/cedrine/ModelTest/my_model_{}".format(epoch+1),save_format='tf')
         print('Model is saved.')
-        
-
-
-   
-        
+         
 
 callbacks = [
     tf.keras.callbacks.EarlyStopping(
@@ -366,7 +513,7 @@ callbacks = [
         restore_best_weights = False,
     ),
     tf.keras.callbacks.CSVLogger(
-        filename  = '/data/cedrine/Models0/log0.csv', 
+        filename  = '/data/cedrine/ModelTest/log0.csv', 
         separator = ',', 
         append    = False,
     )
