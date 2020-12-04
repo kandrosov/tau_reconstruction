@@ -49,16 +49,13 @@ enum class Feature {
     pfCand_py                   = 26,
     pfCand_pz                   = 27,
     pfCand_E                    = 28,
-    // pfCand_rel_eta              = 29,
-    // pfCand_rel_phi              = 30,
 };
 
 string feature_names[29] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
     "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
     "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
     "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
-    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E"};//,
-    //"pfCand_rel_eta","pfCand_rel_phi"};
+    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E"};
 
 string y_label_names[6] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt", "eta", "phi", "m^2"};
 
@@ -131,7 +128,12 @@ struct DataLoader {
 
             //////////////////////////////////////////////////////////////////////
             // Sort inputs by decreasing pt:
-            std::vector<size_t> indices(tau.pfCand_pt.size());
+            size_t size_pfcand = tau.pfCand_pt.size();
+            if(size_pfcand > n_pf){
+                size_pfcand = n_pf;
+            } 
+            std::vector<size_t> indices(size_pfcand);
+            // std::cout << "konnichiwa 0 " << tau.pfCand_pt.size() << std::endl;
             std::iota(indices.begin(), indices.end(), 0);
 
             std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
@@ -189,8 +191,6 @@ struct DataLoader {
                 get_x(Feature::pfCand_track_chi2)           = has_trk_details ? tau.pfCand_track_chi2.at(pf_ind_sorted)    : def_val;
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
                 
-                // get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
-                // get_x(Feature::pfCand_rel_phi)             = tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi;
 
                 //////////////////////////////////////////////////////////////////////
                 ////// 4-momentum part:

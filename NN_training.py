@@ -5,7 +5,7 @@ if gpus:
   try:
     tf.config.experimental.set_virtual_device_configuration(
         gpus[0],
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=7554)]) # ca. 50% => uses effectively 7921MB
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4000)]) # ca. 50% => uses effectively 7921MB
     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:

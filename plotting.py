@@ -31,39 +31,42 @@ def plot_metrics(history):
     axes[1].legend()
     # plt.show()
 
-    fig1, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
-    fig1.suptitle('Resolutions') 
-    axes[0].set_xticks(np.arange(0, n_epoch, 1.0)) 
-    axes[0].plot(epochs, hist["pt_res"]    , 'bo--', label="pt_res") 
-    axes[0].plot(epochs, hist["m2_res"]    , 'ro--', label="m2_res")
-    axes[0].plot(epochs, hist["val_pt_res"], 'b*:', label="val_pt_res") 
-    axes[0].plot(epochs, hist["val_m2_res"], 'r*:', label="val_m2_res") 
-    axes[0].legend()
-    axes[1].set_xticks(np.arange(0, n_epoch, 1.0)) 
-    axes[1].plot(epochs, hist["phi_res"]    , 'go--', label="phi_res") 
-    axes[1].plot(epochs, hist["eta_res"]    , 'mo--', label="eta_res") 
-    axes[1].plot(epochs, hist["val_phi_res"], 'g*:', label="val_phi_res") 
-    axes[1].plot(epochs, hist["val_eta_res"], 'm*:', label="val_eta_res") 
-    axes[1].legend()
+    # fig1, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
+    # fig1.suptitle('Resolutions') 
+    # axes[0].set_xticks(np.arange(0, n_epoch, 1.0)) 
+    # axes[0].plot(epochs, hist["pt_res"]    , 'bo--', label="pt_res") 
+    # axes[0].plot(epochs, hist["m2_res"]    , 'ro--', label="m2_res")
+    # axes[0].plot(epochs, hist["val_pt_res"], 'b*:', label="val_pt_res") 
+    # axes[0].plot(epochs, hist["val_m2_res"], 'r*:', label="val_m2_res") 
+    # axes[0].legend()
+    # axes[1].set_xticks(np.arange(0, n_epoch, 1.0)) 
+    # axes[1].plot(epochs, hist["phi_res"]    , 'go--', label="phi_res") 
+    # axes[1].plot(epochs, hist["eta_res"]    , 'mo--', label="eta_res") 
+    # axes[1].plot(epochs, hist["val_phi_res"], 'g*:', label="val_phi_res") 
+    # axes[1].plot(epochs, hist["val_eta_res"], 'm*:', label="val_eta_res") 
+    # axes[1].legend()
     
 
     pdf0 = pp.PdfPages("../Plots/Metrics.pdf")
     pdf0.savefig(fig0)
-    pdf0.savefig(fig1)
+    # pdf0.savefig(fig1)
     pdf0.close()
     plt.close()
 
 
 ### Plots the confusion matrix of decay modes:
 def plt_conf_dm(conf_dm_mat, old = False):
+    print('ciao 0')
     x_axis_labels = ['$\pi^{\pm}$','$\pi^{\pm} + \pi^0$', '$\pi^{\pm} + 2\pi^0$', \
                  '$\pi^{\pm} + 3\pi^0$','$3\pi^{\pm}$', '$3\pi^{\pm} + 1\pi^0$',\
                  '$3\pi^{\pm} + 2\pi^0$', 'others'] # labels for x-axis
     y_axis_labels = x_axis_labels # labels for y-axis
 
-    fig = plt.figure(figsize=(8,5),dpi=100)
+    # fig = plt.figure(figsize=(8,5),dpi=100)
+    print('ciao 1')
     plt.title("Decay modes")
     sns.heatmap(conf_dm_mat,xticklabels=x_axis_labels, yticklabels=y_axis_labels, cmap='YlGnBu', annot=True, fmt="3.0f")
+    print('ciao 1.1')
     plt.ylim(-0.5,9.5)
     plt.xlim(-0.5,9.5)
     plt.ylabel('True',fontsize = 16)
@@ -73,13 +76,16 @@ def plt_conf_dm(conf_dm_mat, old = False):
         plt.xlabel('Default tau reconstruction',fontsize = 16)
     plt.tight_layout()
     # plt.show()
+    print('ciao 2')
     if old == False:
-        pdf = pp.PdfPages("../Plots/conf_dm_mat.pdf")
+        plt.savefig("../Plots/conf_dm_mat.pdf")
+        # pdf = pp.PdfPages("../Plots/conf_dm_mat.pdf")
     else: 
-        pdf = pp.PdfPages("../Plots/conf_dm_mat_old.pdf")
-    pdf.savefig(fig)
-    pdf.close()
-    plt.close()
+        plt.savefig("../Plots/conf_dm_mat_old.pdf")
+        # pdf = pp.PdfPages("../Plots/conf_dm_mat_old.pdf")
+    # pdf.savefig(fig)
+    # pdf.close()
+    # plt.close()
 
     # ### check the true distribution of the decay modes:
     # tot_dm = conf_dm_mat.sum(axis=1)

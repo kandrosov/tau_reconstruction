@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
 
-from mymodel import *
+from mymodel_copy import *
 from plotting import plot_res
 
 def make_sqrt(m):
@@ -25,7 +25,7 @@ def evaluation():
         "phi_res": phi_res,
         "m2_res" : m2_res,
     }
-    model = tf.keras.models.load_model("/data/cedrine/ModelTest/my_model_{}".format(1), custom_objects=custom_objects, compile=True)
+    model = tf.keras.models.load_model("/data/cedrine/Models0/my_model_{}".format(3), custom_objects=custom_objects, compile=True)
     print("Model loaded.")
 
     generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)
@@ -63,6 +63,7 @@ def evaluation():
     print('\nStart generator loop to predict:\n')
 
     for x,y,z in generator_xyz(): # y is a (n_tau,n_labels) array
+        # print('ciao 0')
         y_pred = model.predict(x) 
         yy     = np.concatenate((y, y_pred), axis = 1) # yy = (y_true_charged, y_true_neutral, y_pred_charged, y_pred_neutral)
 
@@ -83,6 +84,8 @@ def evaluation():
         true_dm = (y_true[:,0]  -1)*5 + y_true[:,1]
         pred_dm = (y_pred_r[:,0]-1)*5 + y_pred_r[:,1]
         def_dm  = z[:,0]
+
+        # print('ciao 1')
 
         for dm in true_dm:
             h_pt_tot.Fill((y_pred[l,2]-y_true[l,2])/y_true[l,2])
@@ -131,7 +134,7 @@ def evaluation():
                     c_def_h_m2_3pi_tot.Fill(m)
 
             l += 1
-
+        # print('ciao 2')
         if conf_dm_mat is None:
             conf_dm_mat     = h_dm
             conf_dm_mat_old = h_dm_old
@@ -140,7 +143,7 @@ def evaluation():
             conf_dm_mat_old += h_dm_old
             
         count_steps += 1
-        if count_steps % 1000 == 0: print('Test set at the:',count_steps,'th event')
+        if count_steps % 1000 == 0: print('Test set at the:',count_steps,'th step')
         if count_steps >= n_steps_test: break
 
     print('#######################################################\

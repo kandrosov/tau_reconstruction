@@ -13,11 +13,11 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 100 #100 # number of pf candidates per event
 n_fe     = 31   # total muber of features: 24
 n_labels = 6    # number of labels per event
-n_epoch  = 5 #100  # number of epochs on which to train
-n_steps_val   = 10 #14213
+n_epoch  = 10 #100  # number of epochs on which to train
+n_steps_val   = 100 #14213
 n_steps_test  = 100 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 10000 #6396973 # total number of events in the dataset = 14'215'297
+entry_stop    = 100000 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -117,7 +117,7 @@ class MyModel(tf.keras.Model):
         self.output_layer_2   = tf.keras.layers.Dense(2  , name='output_layer_2') 
         self.output_layer_100 = tf.keras.layers.Dense(100, name='output_layer_100', activation='softmax') 
 
-    @tf.function
+    # @tf.function
     def call(self, xx):
         x_em1 = self.embedding1(tf.abs(xx[:,:,self.map_features['pfCand_pdgId']]))
         x_em2 = self.embedding2(tf.abs(xx[:,:,self.map_features['pfCand_fromPV']]))
@@ -183,21 +183,37 @@ class MyGNNLayer(tf.keras.layers.Layer):
         self.flatten      = tf.keras.layers.Flatten()
 
     def build(self, input_shape):
-        self.A = self.add_weight("A", shape=((input_shape[-1]) * self.k_nearest, self.num_outputs),
+        self.A = self.add_weight("A", shape=((input_shape[-1]+1) * 2, self.num_outputs),
                                 initializer=tf.keras.initializers.HeUniform, trainable=True)
         self.b = self.add_weight("b", shape=(self.num_outputs,), initializer=tf.keras.initializers.HeUniform, trainable=True)
 
     def next_iter(self, x, final_output, pf_ind):
-            c = tf.stack((x[:,:,-2],x[:,:,-1]), axis = 2)
+            c = x[:,:,-self.n_dim:]
             x_shape = tf.shape(c)
 
-            diff_1 = tf.reshape(c[:,pf_ind,:],(x_shape[0],1,2))
+            diff_1 = tf.reshape(c[:,pf_ind,:],(x_shape[0],1,self.n_dim))
             diff = c-diff_1
             diff = tf.math.square(diff)
             dist = tf.math.reduce_sum(diff, axis = 2)
 
-            _, res = tf.math.top_k(- dist, k = self.k_nearest) # finds the closest neighbours of the current pfcand
+            _, res = tf.math.top_k(- dist, k = self.k_nearest, sorted=True) # finds the closest neighbours of the current pfcand
             s = tf.gather(x, res, axis = 1, batch_dims = 1)
+            dist = tf.gather(dist, res, axis = 1, batch_dims = 1)
+            dist = tf.reshape(dist,(n_tau,self.k_nearest,1))
+            s = tf.concat((s,dist), axis = 2)
+            # print('s.shape 1: ', s.shape) # (n_tau, 10, 35)
+
+            ## weighted sum of features: weight = 1-distance
+            w = 1-dist # weights
+            # print('weigth.shape: ', w.shape) # (n_tau, 10, 1)
+            ss = s[:,1,:]*w[:,1,:]
+            for i in range(2,w.shape[1]):
+                ss += (s[:,i,:]*w[:,i,:])
+            # print('ss.shape: ',ss.shape) # (n_tau, 35)
+
+            s = tf.stack((s[:,0,:],ss), axis = 1) # the current pf_ind corresponds to 0 because sorted.
+
+            # print('s.shape: ',s.shape) # (n_tau, 2, 35)
 
             s = self.flatten(s)
 
@@ -205,13 +221,27 @@ class MyGNNLayer(tf.keras.layers.Layer):
 
             output = tf.reshape(output, (x_shape[0], 1, self.num_outputs))
 
-            
-            #final_output[:, pf_ind, :] = output #.append()
+            # final_output[:,pf_ind,:] = output # tensorflow doesn't allow to assign
+
+            ### Mio
+            # if(pf_ind == n_pf_cand):
+            #     final_output = tf.concat([final_output[:,:pf_ind,:], output], axis = 1)
+            # elif(pf_ind == n_pf_cand-1):
+            #     final_output = tf.concat([final_output[:,:pf_ind,:], output, tf.reshape(final_output[:,pf_ind+1:,:],(x_shape[0], 1, self.num_outputs))], axis = 1)
+            # elif(pf_ind == 0):
+            #     final_output = tf.concat([output,final_output[:,pf_ind+1:,:]], axis = 1)
+            # elif(pf_ind == 1):
+            #     final_output = tf.concat([tf.reshape(final_output[:,:pf_ind,:],(x_shape[0], 1, self.num_outputs)),output,final_output[:,pf_ind+1:,:]], axis = 1)
+            # else:
+            #     final_output = tf.concat([final_output[:,:pf_ind,:], output,final_output[:,pf_ind+1:,:]], axis = 1)
+            # 
+            # print('final_output.shape: ', final_output.shape)
+
             return [pf_ind + 1, tf.concat([final_output, output], axis=1)]
 
-    @tf.function
+    # @tf.function
     def call(self, x):
-        final_outputs = []
+        # final_outputs = []
         x_shape = tf.shape(x)
         n_pf_cand = x_shape[1]
         i = tf.constant(0)
@@ -222,7 +252,22 @@ class MyGNNLayer(tf.keras.layers.Layer):
         body = lambda i, output: self.next_iter(x, output, i)
 
         i, output = tf.while_loop(condition, body, [i, output],
-            shape_invariants=[i.get_shape(), tf.TensorShape([None, None, self.num_outputs])])
+            shape_invariants=[i.get_shape(), tf.TensorShape([None, None, self.num_outputs])], parallel_iterations=1)
+
+        #### Mio
+        # final_output = tf.zeros([x_shape[0], n_pf_cand, self.num_outputs])
+        # # print('final_output.shape: ', final_output.shape)
+
+        # condition = lambda i, final_output: i < n_pf_cand
+        # body = lambda i, final_output: self.next_iter(x, final_output, i, n_pf_cand)
+
+        # i, final_output = tf.while_loop(condition, body, [i, final_output],
+        #         shape_invariants=[i.get_shape(), tf.TensorShape([None, None, self.num_outputs])])
+
+        # y = tf.constant([])
+        # if(final_output==y): print('ahiahiahi!!!')
+        # print('final_output.shape: ', final_output.shape)
+
 
         return output
 
@@ -251,13 +296,17 @@ class MyGNN(tf.keras.Model):
         self.acti_dense = []
         
         list_outputs = [100, 100, 100, 100, 100, 4]
+        list_dim     = [3  , 3  , 2  , 3  , 1  , 1]
         self.n_layers = len(list_outputs)
         for i in range(0,self.n_layers):
-            self.GNN_layers.append(MyGNNLayer(n_dim=2, k_nearest=10, num_outputs=list_outputs[i] , name='GNN_layer_{}'.format(i)))
+            self.GNN_layers.append(MyGNNLayer(n_dim=list_dim[i], k_nearest=10, num_outputs=list_outputs[i] , name='GNN_layer_{}'.format(i)))
             self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
-            self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
             if i != self.n_layers - 1:
+                self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
                 self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
+        
+        self.dense100 = tf.keras.layers.Dense(100, name='dense100')
+        self.dense2 = tf.keras.layers.Dense(2, name='dense2')
          
 
 
@@ -272,58 +321,69 @@ class MyGNN(tf.keras.Model):
         x_part1 = x[:,:,:self.map_features['pfCand_pdgId']]
         x_part2 = x[:,:,(self.map_features["pfCand_fromPV"]+1):]
         x = tf.concat((x_em1,x_em2,x_em3,x_part1,x_part2),axis = 2)
+        # print('x.shape check 1: ', x.shape)
 
         for i in range(0,self.n_layers):
+            if(i == 4): x = tf.concat([x,x1], axis = 2)
+            # if(i == 5): x = tf.concat([x,x2], axis = 2)
+            # print('input: ', i, ' shape: ', x.shape)
             x = self.GNN_layers[i](x)
+            if(i==0): x1 = x
+            # if(i==2): x2 = x
             x = self.batch_norm_dense[i](x)
-            x = self.acti_dense[i](x)
             if i != self.n_layers - 1:
+                x = self.acti_dense[i](x)
                 x = self.dropout_dense[i](x)
-        # print('x.shape check: ', x.shape) # (n_tau, 100, 4)
-
+        # print('x.shape check 2: ', x.shape)
+        x = self.dense100(x)
+        x = self.dense2(x)
+        # print('x.shape check 3: ', x.shape) # (n_tau, 100, 4)
 
         ##### Particles closest to 0?
-        distance = tf.math.sqrt(tf.math.square(x[:,:,-2]) + tf.math.square(x[:,:,-1]))
+        # distance = x[:,:,-1]
         # print('distance.shape: ', distance.shape) #(n_tau, n_pf)
 
-        sf = 1 - distance
+        # sf = 1 - distance
 
 
         ### 4-momentum:
-        mypxs  = xx[:,:,self.px_index] * sf * xx[:,:,self.valid_index]
-        mypys  = xx[:,:,self.py_index] * sf * xx[:,:,self.valid_index]
-        mypzs  = xx[:,:,self.pz_index] * sf * xx[:,:,self.valid_index]
-        myEs   = xx[:,:,self.E_index]  * sf * xx[:,:,self.valid_index]
+        # mypxs  = xx[:,:,self.px_index] * sf * xx[:,:,self.valid_index]
+        # mypys  = xx[:,:,self.py_index] * sf * xx[:,:,self.valid_index]
+        # mypzs  = xx[:,:,self.pz_index] * sf * xx[:,:,self.valid_index]
+        # myEs   = xx[:,:,self.E_index]  * sf * xx[:,:,self.valid_index]
 
-        mypx   = tf.reduce_sum(mypxs, axis = 1)
-        mypy   = tf.reduce_sum(mypys, axis = 1)
-        mypz   = tf.reduce_sum(mypzs, axis = 1)
-        myE    = tf.reduce_sum(myEs , axis = 1)
+        # mypx   = tf.reduce_sum(mypxs, axis = 1)
+        # mypy   = tf.reduce_sum(mypys, axis = 1)
+        # mypz   = tf.reduce_sum(mypzs, axis = 1)
+        # myE    = tf.reduce_sum(myEs , axis = 1)
 
-        mypx2  = tf.square(mypx)
-        mypy2  = tf.square(mypy)
-        mypz2  = tf.square(mypz)
+        # mypx2  = tf.square(mypx)
+        # mypy2  = tf.square(mypy)
+        # mypz2  = tf.square(mypz)
 
-        mypt   = tf.sqrt(mypx2 + mypy2)
-        mymass = tf.square(myE) - mypx2 - mypy2 - mypz2
-        absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
+        # mypt   = tf.sqrt(mypx2 + mypy2)
+        # mymass = tf.square(myE) - mypx2 - mypy2 - mypz2
+        # absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
 
         ### for myeta and myphi:
-        myphi = mypt*0.0
-        myeta = mypt*0.0
+        # myphi = mypt*0.0
+        # myeta = mypt*0.0
 
-        cosTheta = tf.where(absp==0, 1.0, mypz/absp)
-        myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
-        myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
+        # cosTheta = tf.where(absp==0, 1.0, mypz/absp)
+        # myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
+        # myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
 
-        ### charged and neutral number of hadrons
-        mycharged = tf.math.reduce_sum(x[:,:,0] * sf * x[:,:,0], axis = 1)
-        myneurals = tf.math.reduce_sum(x[:,:,1] * sf * x[:,:,1], axis = 1)
+        ## charged and neutral number of hadrons
+        # mycharged = tf.math.reduce_sum(x[:,:,0] * sf * x[:,:,0], axis = 1)
+        # myneurals = tf.math.reduce_sum(x[:,:,1] * sf * x[:,:,1], axis = 1)
 
         # xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
-        xout = tf.stack([mycharged,myneurals], axis=1)
 
-        return xout 
+        xout = tf.math.reduce_sum(x, axis = 1)
+        # print('x.shape check 4: ', x.shape)
+        # tf.print('x: ',x)
+        # xout = tf.stack([mycharged,myneurals], axis=1)
+        return xout
 
 
 ### Function that creates generators:
@@ -344,7 +404,7 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
                 if z == True:
                     z_np = np.asarray(data.z)
                     z_2d = z_np.reshape((n_tau, n_labels-1))
-                    yield x_3d, y_2d, z_2d
+                    yield x_3d, y_2d[:, 0:2], z_2d
                 else:
                     yield x_3d, y_2d[:, 0:2]
             ++cnt
@@ -357,7 +417,7 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
 #############################################################################################
 ##### Custom metrics:
 ### Accuracy calculation for number of charged/neutral hadrons:
-@tf.function
+# @tf.function
 def my_acc(y_true, y_pred):
     # print('\naccuracy calcualtion:')
     y_true = tf.math.round(y_true)
@@ -459,6 +519,8 @@ class CustomMSE(keras.losses.Loss):
         # w = [0.3, 0.14, 0.14, 0.14, 0.14, 0.14]
         # print('\nLoss calculation:')
         w = [1., 1, 1, 1, 1, 1]
+        # print('y_true.shape: ',y_true.shape)
+        # print('y_pred.shape: ',y_pred.shape)
         mse1 = tf.math.reduce_mean(tf.square(y_true[:,0] - y_pred[:,0]))
         mse2 = tf.math.reduce_mean(tf.square(y_true[:,1] - y_pred[:,1]))
         # mse3 = tf.math.reduce_mean(tf.square(y_true[:,2] - y_pred[:,2]))
@@ -487,7 +549,7 @@ class ValidationCallback(tf.keras.callbacks.Callback):
         print("\nValidation:")
         generator_val, n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val) 
         myresults = self.model.evaluate(x = tf.data.Dataset.from_generator(generator_val,(tf.float32, tf.float32),\
-                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,n_labels]))), batch_size = n_batches_val, steps = n_steps_val)
+                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,2]))), batch_size = n_batches_val, steps = n_steps_val)
         if len(self.model.metrics_names) == 1:
             i = self.model.metrics_names[0]
             logs["val_"+i] = myresults

@@ -13,9 +13,9 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 100 #100 # number of pf candidates per event
 n_fe     = 29#31   # total muber of features: 24
 n_labels = 6    # number of labels per event
-n_epoch  = 1 #100  # number of epochs on which to train
+n_epoch  = 2 #100  # number of epochs on which to train
 n_steps_val   = 14213
-n_steps_test  = 63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_steps_test  = 100#63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
 entry_stop    = 6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
@@ -24,8 +24,9 @@ entry_start_val  = entry_stop +1
 print('Entry_start_val:', entry_start_val)
 entry_stop_val   = entry_stop + n_tau*n_steps_val + 1
 print('Entry_stop_val: ',entry_stop_val)
-entry_start_test = entry_stop_val+1
-entry_stop_test  = entry_stop_val + n_tau*n_steps_test + 1
+# entry_start_test = entry_stop_val+1
+entry_start_test  = entry_stop_val  + 1
+entry_stop_test  = entry_start_test + n_tau*n_steps_test
 print('Entry_stop_test (<= 14215297): ',entry_stop_test)
 
 
@@ -176,27 +177,6 @@ class MyModel(tf.keras.Model):
         return xout
 
 
-# create a tensor with the closest pfCands and their features
-def select_cand(_x, _res, k = 11):
-    
-    # ind = tf.reshape(_res,(n_tau,k))
-    # _s = tf.gather(_x, ind, axis = 1)
-    # print('_s: ',_s.shape)
-
-    _sss = _x[:,:,:]
-    for i in range(0,n_tau):
-        _s = tf.gather(_x[i,:,:],_res[i,:],axis=0)
-        if(i%2==0):
-            _ss = _s
-        else:
-            _ss = tf.stack((_ss,_s),axis = 0)
-            if(i == 1):
-                _sss = _ss
-            else:
-                _sss = tf.concat((_sss,_ss),axis = 0)
-
-    return _sss
-
 
 class MyGNN(tf.keras.Model):
 
@@ -339,7 +319,9 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
         while True:
             _data_loader.Reset()
             while _data_loader.HasNext(): 
+                # print('hello 1')
                 data = _data_loader.LoadNext()
+                # print('hello 2')
                 x_np = np.asarray(data.x)
                 x_3d = x_np.reshape((n_tau, n_pf, n_fe))
                 y_np = np.asarray(data.y)
