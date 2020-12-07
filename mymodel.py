@@ -13,11 +13,11 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 100 #100 # number of pf candidates per event
 n_fe     = 31   # total muber of features: 24
 n_labels = 6    # number of labels per event
-n_epoch  = 10 #100  # number of epochs on which to train
+n_epoch  = 2 #100  # number of epochs on which to train
 n_steps_val   = 100 #14213
 n_steps_test  = 100 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 100000 #6396973 # total number of events in the dataset = 14'215'297
+entry_stop    = 1000 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -37,7 +37,7 @@ class StdLayer(tf.keras.layers.Layer):
         self.vars_std = [1] * n_vars
         self.vars_mean = [1] * n_vars
         self.vars_apply = [False] * n_vars
-        for var, ms in data_json.items(): 
+        for var, ms in data_json.items():
             pos = var_pos[var]
             self.vars_mean[pos]  = ms[0]['mean']
             self.vars_std[pos]   = ms[0]['std']
@@ -88,10 +88,10 @@ class ScaleLayer(tf.keras.layers.Layer):
 class MyModel(tf.keras.Model):
     def __init__(self, map_features, **kwargs):
         super(MyModel, self).__init__(**kwargs)
-        self.px_index    = map_features["pfCand_px"] 
-        self.py_index    = map_features["pfCand_py"] 
+        self.px_index    = map_features["pfCand_px"]
+        self.py_index    = map_features["pfCand_py"]
         self.pz_index    = map_features["pfCand_pz"]
-        self.E_index     = map_features["pfCand_E"] 
+        self.E_index     = map_features["pfCand_E"]
         self.valid_index = map_features["pfCand_valid"]
         self.map_features = map_features
 
@@ -114,8 +114,8 @@ class MyModel(tf.keras.Model):
             self.acti_dense.append(tf.keras.layers.Activation('relu', name='acti_dense_{}'.format(i)))
             self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
         
-        self.output_layer_2   = tf.keras.layers.Dense(2  , name='output_layer_2') 
-        self.output_layer_100 = tf.keras.layers.Dense(100, name='output_layer_100', activation='softmax') 
+        self.output_layer_2   = tf.keras.layers.Dense(2  , name='output_layer_2')
+        self.output_layer_100 = tf.keras.layers.Dense(100, name='output_layer_100', activation='softmax')
 
     # @tf.function
     def call(self, xx):
@@ -179,13 +179,16 @@ class MyGNNLayer(tf.keras.layers.Layer):
         super(MyGNNLayer, self).__init__(**kwargs)
         self.n_dim        = n_dim
         self.k_nearest    = k_nearest
-        self.num_outputs  = tf.constant(num_outputs, dtype=tf.int32)
+        self.num_outputs  = num_outputs#tf.constant(num_outputs, dtype=tf.int32)
         self.flatten      = tf.keras.layers.Flatten()
 
     def build(self, input_shape):
         self.A = self.add_weight("A", shape=((input_shape[-1]+1) * 2, self.num_outputs),
-                                initializer=tf.keras.initializers.HeUniform, trainable=True)
-        self.b = self.add_weight("b", shape=(self.num_outputs,), initializer=tf.keras.initializers.HeUniform, trainable=True)
+                                initializer="he_uniform", trainable=True)
+        self.b = self.add_weight("b", shape=(self.num_outputs,), initializer="he_uniform", trainable=True)
+    
+    def compute_output_shape(self, input_shape):
+        return [input_shape[0], input_shape[1], self.num_outputs]
 
     def next_iter(self, x, final_output, pf_ind):
             c = x[:,:,-self.n_dim:]
@@ -206,22 +209,20 @@ class MyGNNLayer(tf.keras.layers.Layer):
             ## weighted sum of features: weight = 1-distance
             w = 1-dist # weights
             # print('weigth.shape: ', w.shape) # (n_tau, 10, 1)
-            ss = s[:,1,:]*w[:,1,:]
-            for i in range(2,w.shape[1]):
-                ss += (s[:,i,:]*w[:,i,:])
-            # print('ss.shape: ',ss.shape) # (n_tau, 35)
+            ss = s*w
+            ss = ss[:,1:-1,:] # exclude the first one
+            ss = tf.math.reduce_sum(ss, axis = 1)
+            # print('ss.shape: ',ss.shape) 
 
             s = tf.stack((s[:,0,:],ss), axis = 1) # the current pf_ind corresponds to 0 because sorted.
 
-            # print('s.shape: ',s.shape) # (n_tau, 2, 35)
+            # print('s.shape: ',s.shape) # 
 
             s = self.flatten(s)
 
             output = tf.matmul(s, self.A) + self.b
 
             output = tf.reshape(output, (x_shape[0], 1, self.num_outputs))
-
-            # final_output[:,pf_ind,:] = output # tensorflow doesn't allow to assign
 
             ### Mio
             # if(pf_ind == n_pf_cand):
@@ -240,36 +241,90 @@ class MyGNNLayer(tf.keras.layers.Layer):
             return [pf_ind + 1, tf.concat([final_output, output], axis=1)]
 
     # @tf.function
-    def call(self, x):
-        # final_outputs = []
-        x_shape = tf.shape(x)
-        n_pf_cand = x_shape[1]
-        i = tf.constant(0)
+    def call(self, xx):
+        ###################################### Old ##################################################
+        # x_shape = tf.shape(x)
+        # n_pf_cand = x_shape[1]
+        # i = tf.constant(0)
 
-        output = tf.zeros([x_shape[0], 0, self.num_outputs])
+        # output = tf.zeros([x_shape[0], 0, self.num_outputs])
 
-        condition = lambda i, output: i < n_pf_cand
-        body = lambda i, output: self.next_iter(x, output, i)
+        # condition = lambda i, output: i < n_pf_cand
+        # body = lambda i, output: self.next_iter(x, output, i)
 
-        i, output = tf.while_loop(condition, body, [i, output],
-            shape_invariants=[i.get_shape(), tf.TensorShape([None, None, self.num_outputs])], parallel_iterations=1)
-
-        #### Mio
-        # final_output = tf.zeros([x_shape[0], n_pf_cand, self.num_outputs])
-        # # print('final_output.shape: ', final_output.shape)
-
-        # condition = lambda i, final_output: i < n_pf_cand
-        # body = lambda i, final_output: self.next_iter(x, final_output, i, n_pf_cand)
-
-        # i, final_output = tf.while_loop(condition, body, [i, final_output],
-        #         shape_invariants=[i.get_shape(), tf.TensorShape([None, None, self.num_outputs])])
-
-        # y = tf.constant([])
-        # if(final_output==y): print('ahiahiahi!!!')
-        # print('final_output.shape: ', final_output.shape)
+        # i, output = tf.while_loop(condition, body, [i, output],
+        #     shape_invariants=[i.get_shape(), tf.TensorShape([None, None, self.num_outputs])], parallel_iterations=1)
 
 
-        return output
+        ###################################### New ##################################################
+        ### New x called xx containing copies for each pf_Cand:
+        print('****************')
+        print('xx shape:', xx)
+        x = xx
+        x_shape = tf.shape(xx)
+        rep = tf.constant([1,100,1], tf.int32)
+        a = tf.tile(x, rep)
+        a = tf.reshape(a,(x_shape[0],x_shape[1],x_shape[1],x_shape[2]))
+        # print('a shape:', a)
+        if(a[3,1,1,:]==a[3,1,34,:]): print('yes1!!!')
+        if(a[3,1,1,:]==a[3,34,1,:]): print('no1!!!\n\n')
+
+        c1 = tf.constant([1,1,1], tf.float32)
+        c2 = tf.constant([1,1,3.4], tf.float32)
+        # if(c1==c2): print('hi1')
+        # if(tf.reduce_any(c1==c2, axis = 0)): print('hi2')
+        # if(tf.reduce_all(c1==c2)==True): print('hi!!!')
+        
+        ccss1 = tf.constant([True,True,False])
+        print('ccss1: ',ccss1)
+        test1 = tf.constant([True])
+        test2 = tf.math.reduce_all(ccss1)
+        print('test2: ', test2)
+        if(test2==test1): 
+            print('hi true')
+        else:
+            print('hi false')
+
+        test_count = tf.math.count_nonzero(ccss1)
+        print('tfprint:')
+        tf.print(test_count)
+        print('ft print passed')
+        
+        # b = tf.repeat(xx, repeats=[100] * x_shape[2], axis=2)
+        b = tf.repeat(xx, repeats=[100] * 34, axis=2)
+        # print('b.shape 1:', b)
+        b = tf.reshape(b,(x_shape[0],x_shape[1],x_shape[1],x_shape[2]))
+        # print('b shape:', b)
+        if(b[3,1,1,:] ==b[3,1,34,:]): print('\n\nno2!!!')
+        if(b[3,1,1,:] ==b[3,34,1,:]): print('yes2!!!')
+        if(a[3,1,34,:]==b[3,34,1,:]): print('yes3!!!')
+
+
+        ### Compute distances:
+        ca = a[:,:,:, -self.n_dim:]
+        cb = b[:,:,:, -self.n_dim:]
+        c_shape = tf.shape(ca)
+        print('ca.shape: ',ca) # (100, 100, 100, 2)
+
+        diff = ca-cb
+        diff = tf.math.square(diff)
+        dist = tf.math.reduce_sum(diff, axis = -1)
+        print('dist.shape: ', dist) # (100, 100, 100)
+
+        dist = tf.reshape(dist,(c_shape[0],c_shape[1],c_shape[2],1))
+        print('dist.shape: ', dist) # (100, 100, 100,1)
+
+        na = tf.concat((a,dist),axis=-1)
+        na_sorted = tf.argsort(na,axis=-1,direction='ASCENDING')
+        na_10 = tf.gather()
+
+
+
+
+
+
+
+        return xx #tf.reshape(output, (x_shape[0], x_shape[1], self.num_outputs))
 
 
 
@@ -277,10 +332,10 @@ class MyGNN(tf.keras.Model):
 
     def __init__(self, map_features, **kwargs):
         super(MyGNN, self).__init__(**kwargs)
-        self.px_index     = map_features["pfCand_px"] 
-        self.py_index     = map_features["pfCand_py"] 
+        self.px_index     = map_features["pfCand_px"]
+        self.py_index     = map_features["pfCand_py"]
         self.pz_index     = map_features["pfCand_pz"]
-        self.E_index      = map_features["pfCand_E"] 
+        self.E_index      = map_features["pfCand_E"]
         self.valid_index  = map_features["pfCand_valid"]
         self.map_features = map_features
 
@@ -295,22 +350,22 @@ class MyGNN(tf.keras.Model):
         self.batch_norm_dense = []
         self.acti_dense = []
         
-        list_outputs = [100, 100, 100, 100, 100, 4]
-        list_dim     = [3  , 3  , 2  , 3  , 1  , 1]
+        list_outputs = [100] * 9 + [10]
+        list_dim     = [2] * 10
         self.n_layers = len(list_outputs)
         for i in range(0,self.n_layers):
             self.GNN_layers.append(MyGNNLayer(n_dim=list_dim[i], k_nearest=10, num_outputs=list_outputs[i] , name='GNN_layer_{}'.format(i)))
             self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
-            if i != self.n_layers - 1:
-                self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
-                self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
+            self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
+            self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
         
-        self.dense100 = tf.keras.layers.Dense(100, name='dense100')
+        self.dense100   = tf.keras.layers.Dense(100, name='dense100')
+        self.dense100_2 = tf.keras.layers.Dense(100, name='dense100_2')
         self.dense2 = tf.keras.layers.Dense(2, name='dense2')
          
 
 
-    @tf.function
+    # @tf.function
     def call(self, xx):
         x_em1 = self.embedding1(tf.abs(xx[:,:,self.map_features['pfCand_pdgId']]))
         x_em2 = self.embedding2(tf.abs(xx[:,:,self.map_features['pfCand_fromPV']]))
@@ -324,20 +379,21 @@ class MyGNN(tf.keras.Model):
         # print('x.shape check 1: ', x.shape)
 
         for i in range(0,self.n_layers):
-            if(i == 4): x = tf.concat([x,x1], axis = 2)
-            # if(i == 5): x = tf.concat([x,x2], axis = 2)
-            # print('input: ', i, ' shape: ', x.shape)
+            if i > 1:
+                x = tf.concat([x0, x], axis = 2)
             x = self.GNN_layers[i](x)
-            if(i==0): x1 = x
-            # if(i==2): x2 = x
+            if i == 0: 
+                x0 = x
             x = self.batch_norm_dense[i](x)
-            if i != self.n_layers - 1:
-                x = self.acti_dense[i](x)
-                x = self.dropout_dense[i](x)
+            x = self.acti_dense[i](x)
+            x = self.dropout_dense[i](x)
+        
         # print('x.shape check 2: ', x.shape)
+        x_shape = tf.shape(x)
+        x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
         x = self.dense100(x)
+        x = self.dense100_2(x)
         x = self.dense2(x)
-        # print('x.shape check 3: ', x.shape) # (n_tau, 100, 4)
 
         ##### Particles closest to 0?
         # distance = x[:,:,-1]
@@ -379,7 +435,7 @@ class MyGNN(tf.keras.Model):
 
         # xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
 
-        xout = tf.math.reduce_sum(x, axis = 1)
+        xout = x
         # print('x.shape check 4: ', x.shape)
         # tf.print('x: ',x)
         # xout = tf.stack([mycharged,myneurals], axis=1)
@@ -395,7 +451,7 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
         cnt = 0
         while True:
             _data_loader.Reset()
-            while _data_loader.HasNext(): 
+            while _data_loader.HasNext():
                 data = _data_loader.LoadNext()
                 x_np = np.asarray(data.x)
                 x_3d = x_np.reshape((n_tau, n_pf, n_fe))
@@ -408,7 +464,7 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
                 else:
                     yield x_3d, y_2d[:, 0:2]
             ++cnt
-            if cnt == 100: 
+            if cnt == 100:
                 gc.collect() # garbage collection to improve preformance
                 cnt = 0
     
@@ -547,7 +603,7 @@ class ValidationCallback(tf.keras.callbacks.Callback):
         # keys = list(logs.keys())
         # print("Log keys: {}".format(keys))
         print("\nValidation:")
-        generator_val, n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val) 
+        generator_val, n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val)
         myresults = self.model.evaluate(x = tf.data.Dataset.from_generator(generator_val,(tf.float32, tf.float32),\
                             (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,2]))), batch_size = n_batches_val, steps = n_steps_val)
         if len(self.model.metrics_names) == 1:
@@ -566,17 +622,17 @@ class ValidationCallback(tf.keras.callbacks.Callback):
 
 callbacks = [
     tf.keras.callbacks.EarlyStopping(
-        monitor   = 'val_loss', 
+        monitor   = 'val_loss',
         min_delta = 0, # Minimum change in the monitored quantity to qualify as an improvement
         patience  = 5, # Number of epochs with no improvement after which training will be stopped
-        verbose   = 0, 
+        verbose   = 0,
         mode      = 'min', # it will stop when the quantity monitored has stopped decreasing
-        baseline  = None, 
+        baseline  = None,
         restore_best_weights = False,
     ),
     tf.keras.callbacks.CSVLogger(
-        filename  = '/data/cedrine/ModelTest/log0.csv', 
-        separator = ',', 
+        filename  = '/data/cedrine/ModelTest/log0.csv',
+        separator = ',',
         append    = False,
     )
 ]

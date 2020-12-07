@@ -131,7 +131,11 @@ struct DataLoader {
 
             //////////////////////////////////////////////////////////////////////
             // Sort inputs by decreasing pt:
-            std::vector<size_t> indices(tau.pfCand_pt.size());
+            size_t size_pfcand = tau.pfCand_pt.size();
+            if(size_pfcand > n_pf){
+                size_pfcand = n_pf;
+            } 
+            std::vector<size_t> indices(size_pfcand);
             std::iota(indices.begin(), indices.end(), 0);
 
             std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {

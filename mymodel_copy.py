@@ -13,9 +13,9 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 100 #100 # number of pf candidates per event
 n_fe     = 29#31   # total muber of features: 24
 n_labels = 6    # number of labels per event
-n_epoch  = 2 #100  # number of epochs on which to train
+n_epoch  = 5 #100  # number of epochs on which to train
 n_steps_val   = 14213
-n_steps_test  = 100#63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_steps_test  = 63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
 entry_stop    = 6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
@@ -139,8 +139,8 @@ class MyModel(tf.keras.Model):
             x = self.dropout_dense[i](x)
         x2   = self.output_layer_2(x)
         x100 = self.output_layer_100(x)
-        print('x100.shape: ', x100.shape)
-        print('x2.shape: ', x2.shape)
+        # print('x100.shape: ', x100.shape)
+        # print('x2.shape: ', x2.shape)
 
         ### 4-momentum:
         mypxs  = xx[:,:,self.px_index] * x100 * xx[:,:,self.valid_index]
@@ -175,7 +175,6 @@ class MyModel(tf.keras.Model):
         xout = tf.stack([xx20,xx21,mypt,myeta,myphi,mymass], axis=1)
 
         return xout
-
 
 
 class MyGNN(tf.keras.Model):
@@ -483,7 +482,7 @@ class ValidationCallback(tf.keras.callbacks.Callback):
                 cnt += 1
         # print('Validation finished.')
         ### Save the entire models:
-        self.model.save("/data/cedrine/ModelTest/my_model_{}".format(epoch+1),save_format='tf')
+        self.model.save("/data/cedrine/Models0/my_model_{}".format(epoch+1),save_format='tf')
         print('Model is saved.')
          
 
@@ -498,7 +497,7 @@ callbacks = [
         restore_best_weights = False,
     ),
     tf.keras.callbacks.CSVLogger(
-        filename  = '/data/cedrine/ModelTest/log0.csv', 
+        filename  = '/data/cedrine/Models0/log0.csv', 
         separator = ',', 
         append    = False,
     )

@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib as mpl
-# mpl.use('Agg')
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
@@ -13,9 +13,6 @@ from mymodel_copy import *
 def plot_metrics(history):
     epochs = history.epoch
     hist   = pd.DataFrame(history.history)
-    # print('\nPrint history: ',history.history)
-    # for i in history.history:
-    #     print(i)
 
     fig0, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
     fig0.suptitle('Metrics')
@@ -31,27 +28,25 @@ def plot_metrics(history):
     axes[1].plot(epochs, hist["my_acc"], 'bo--', label="accuracy")
     axes[1].plot(epochs, hist["val_my_acc"], 'ro--', label=" val accuracy")
     axes[1].legend()
-    # plt.show()
 
-    # fig1, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
-    # fig1.suptitle('Resolutions') 
-    # axes[0].set_xticks(np.arange(0, n_epoch, 1.0)) 
-    # axes[0].plot(epochs, hist["pt_res"]    , 'bo--', label="pt_res") 
-    # axes[0].plot(epochs, hist["m2_res"]    , 'ro--', label="m2_res")
-    # axes[0].plot(epochs, hist["val_pt_res"], 'b*:', label="val_pt_res") 
-    # axes[0].plot(epochs, hist["val_m2_res"], 'r*:', label="val_m2_res") 
-    # axes[0].legend()
-    # axes[1].set_xticks(np.arange(0, n_epoch, 1.0)) 
-    # axes[1].plot(epochs, hist["phi_res"]    , 'go--', label="phi_res") 
-    # axes[1].plot(epochs, hist["eta_res"]    , 'mo--', label="eta_res") 
-    # axes[1].plot(epochs, hist["val_phi_res"], 'g*:', label="val_phi_res") 
-    # axes[1].plot(epochs, hist["val_eta_res"], 'm*:', label="val_eta_res") 
-    # axes[1].legend()
+    fig1, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
+    fig1.suptitle('Resolutions') 
+    axes[0].set_xticks(np.arange(0, n_epoch, 1.0)) 
+    axes[0].plot(epochs, hist["pt_res"]    , 'bo--', label="pt_res") 
+    axes[0].plot(epochs, hist["m2_res"]    , 'ro--', label="m2_res")
+    axes[0].plot(epochs, hist["val_pt_res"], 'b*:', label="val_pt_res") 
+    axes[0].plot(epochs, hist["val_m2_res"], 'r*:', label="val_m2_res") 
+    axes[0].legend()
+    axes[1].set_xticks(np.arange(0, n_epoch, 1.0)) 
+    axes[1].plot(epochs, hist["phi_res"]    , 'go--', label="phi_res") 
+    axes[1].plot(epochs, hist["eta_res"]    , 'mo--', label="eta_res") 
+    axes[1].plot(epochs, hist["val_phi_res"], 'g*:', label="val_phi_res") 
+    axes[1].plot(epochs, hist["val_eta_res"], 'm*:', label="val_eta_res") 
+    axes[1].legend()
     
-
-    pdf0 = pp.PdfPages("/data/cedrine/ModelTest/Metrics.pdf")
+    pdf0 = pp.PdfPages("/data/cedrine/Models0/metrics.pdf")
     pdf0.savefig(fig0)
-    # pdf0.savefig(fig1)
+    pdf0.savefig(fig1)
     pdf0.close()
     plt.close()
 
@@ -129,6 +124,7 @@ def accuracy_calc(conf_dm_mat, old = False):
         accuracy_value += accuracy[i]
 
     return accuracy_value
+
 
 def plot_res(h, def_h, xlabelname, c_dm = False):
     def_h.SetXTitle(xlabelname)

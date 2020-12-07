@@ -17,11 +17,11 @@ if gpus:
 ##################################################################################
 import ROOT as R
 
-R.gInterpreter.ProcessLine('#include "DataLoader.h"')
+R.gInterpreter.ProcessLine('#include "DataLoader_copy.h"')
 
-from training import training
-from mymodel import * # gives us all n_tau, n_pf, ....
-from plotting import plot_metrics
+from training_copy import training
+from mymodel_copy import * # gives us all n_tau, n_pf, ....
+from plotting_copy import plot_metrics
 
 print('\n#######################################################\
       \n              Training start !!!                  \n\
@@ -29,7 +29,7 @@ print('\n#######################################################\
 
 history = training() # trains the model
 
-# plot_metrics(history) # Plots the loss and accuracy curves for trainset and validationset
+plot_metrics(history) # Plots the loss and accuracy curves for trainset and validationset
 
 print('#######################################################\
       \n              Training finished !!!                  \n\
