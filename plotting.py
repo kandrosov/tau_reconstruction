@@ -7,7 +7,7 @@ import seaborn as sns
 import numpy as np
 import ROOT as R
 
-from mymodel_copy import *
+from mymodel import *
 
 ### Plots the loss and accuracy for the trainset and the validationset:
 def plot_metrics(history):

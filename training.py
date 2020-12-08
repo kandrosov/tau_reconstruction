@@ -28,7 +28,7 @@ def training():
     model.summary()
     print('\nModel is fit:\n')
     history = model.fit(x = tf.data.Dataset.from_generator(generator,(tf.float32, tf.float32),\
-                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,2]))),\
+                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,6]))),\
                             epochs = n_epoch, steps_per_epoch = n_batches, callbacks=[ValidationCallback(),callbacks])
     
     print('\nModel finished training.')
