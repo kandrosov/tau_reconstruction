@@ -75,7 +75,7 @@ struct DataLoader {
     Long64_t end_dataset;
     Long64_t current_entry; // number of the current entry
 
-    static const size_t n_pf    = 100; // number of pf candidates per event
+    static const size_t n_pf    = 50; // number of pf candidates per event
     static const size_t n_fe    = 31;  // number of featurese per pf candidate
     static const size_t n_label = 6;   // chanrged and neutral particle label
 
@@ -131,11 +131,7 @@ struct DataLoader {
 
             //////////////////////////////////////////////////////////////////////
             // Sort inputs by decreasing pt:
-            size_t size_pfcand = tau.pfCand_pt.size();
-            if(size_pfcand > n_pf){
-                size_pfcand = n_pf;
-            } 
-            std::vector<size_t> indices(size_pfcand);
+            std::vector<size_t> indices(tau.pfCand_pt.size());
             std::iota(indices.begin(), indices.end(), 0);
 
             std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
@@ -144,7 +140,10 @@ struct DataLoader {
             
             TLorentzVector gen_p4(0, 0, 0, 0); // 4-momentum vector
 
-            for(size_t pf_ind = 0; pf_ind < indices.size(); ++pf_ind) {
+            size_t test = n_pf; // doesn't work without this line
+            size_t max_pf = std::min(test,indices.size());
+
+            for(size_t pf_ind = 0; pf_ind < max_pf; ++pf_ind) {
                 
                 auto get_x = [&](Feature fe) -> float& {
                     size_t index = GetIndex_x(tau_ind, pf_ind, fe);
@@ -194,7 +193,7 @@ struct DataLoader {
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
                 
                 get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
-                get_x(Feature::pfCand_rel_phi)             = tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi;
+                get_x(Feature::pfCand_rel_phi)             = (tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) <= M_PI && (tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) > -M_PI ? tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi: (tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) > M_PI ? tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi - 2*M_PI : tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi + 2*M_PI;
 
                 //////////////////////////////////////////////////////////////////////
                 ////// 4-momentum part:

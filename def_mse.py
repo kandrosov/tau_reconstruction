@@ -72,7 +72,7 @@ for tau_ind in range(len(np_true["lepton_gen_vis_pt"])):
 
 mse_ch   = np.mean(np.square(def_n_ch  - true_n_ch))
 mse_neu  = np.mean(np.square(def_n_neu - true_n_neu))
-mse_pt   = np.mean(np.square(np_def["tau_pt"]  - true_pt))
+mse_pt   = np.mean(np.square((np_def["tau_pt"]  - true_pt)/true_pt))
 mse_eta  = np.mean(np.square(np_def["tau_eta"] - true_eta))
 mse_phi  = np.mean(np.square(np_def["tau_phi"] - true_phi))
 mse_mass = np.mean(np.square(np_def["tau_mass"]*np_def["tau_mass"]- true_mass))

@@ -5,7 +5,7 @@ if gpus:
   try:
     tf.config.experimental.set_virtual_device_configuration(
         gpus[0],
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10000)]) # ca. 50% => uses effectively 7921MB
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8000)]) # ca. 50% => uses effectively 7921MB
     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:
@@ -29,7 +29,7 @@ print('\n#######################################################\
 
 history = training() # trains the model
 
-# plot_metrics(history) # Plots the loss and accuracy curves for trainset and validationset
+plot_metrics(history) # Plots the loss and accuracy curves for trainset and validationset
 
 print('#######################################################\
       \n              Training finished !!!                  \n\

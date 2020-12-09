@@ -9,15 +9,15 @@ import math
 # import matplotlib.pyplot as plt
 
 ### All the parameters:
-n_tau    = 50 # number of taus (or events) per batch
-n_pf     = 100 #100 # number of pf candidates per event
+n_tau    = 100 # number of taus (or events) per batch
+n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 31   # total muber of features: 24
 n_labels = 6    # number of labels per event
 n_epoch  = 5 #100  # number of epochs on which to train
-n_steps_val   = 50 #14213
+n_steps_val   = 10 #14213
 n_steps_test  = 100 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 5000 #6396973 # total number of events in the dataset = 14'215'297
+entry_stop    = 10000 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -240,15 +240,18 @@ class MyGNNLayer(tf.keras.layers.Layer):
         mask = tf.reshape(mask, (w_shape[0],w_shape[1],1)) # needed for multiplication
         ## copies of mask:
         rep  = tf.stack([1,w_shape[1],1])
-        mask = tf.tile(mask, rep)
-        mask = tf.reshape(mask,(w_shape[0],w_shape[1],w_shape[2],1))
-        s = na * w * mask # weighted na
+        mask_copy = tf.tile(mask, rep)
+        mask_copy = tf.reshape(mask_copy,(w_shape[0],w_shape[1],w_shape[2],1))
+        s = na * w * mask_copy # weighted na
         ss = s[:,:,1:,:] # exclude the first one
         ss = tf.math.reduce_sum(ss, axis = 2) # weighted sum of features
         x = tf.concat((s[:,:,1,:],ss), axis = 2) # add to original features
 
         ### Ax+b:
         output = tf.matmul(x, self.A) + self.b
+
+        # print('output.shape: ', output.shape)
+        output = output * mask # reapply mask to be sure
 
         return output
 
@@ -258,11 +261,6 @@ class MyGNN(tf.keras.Model):
 
     def __init__(self, map_features, **kwargs):
         super(MyGNN, self).__init__(**kwargs)
-        # self.px_index     = map_features["pfCand_px"]
-        # self.py_index     = map_features["pfCand_py"]
-        # self.pz_index     = map_features["pfCand_pz"]
-        # self.E_index      = map_features["pfCand_E"]
-        # self.valid_index  = map_features["pfCand_valid"]
         self.map_features = map_features
 
         self.embedding1   = tf.keras.layers.Embedding(350,2)
@@ -286,7 +284,7 @@ class MyGNN(tf.keras.Model):
         
         self.dense100   = tf.keras.layers.Dense(100, name='dense100')
         self.dense100_2 = tf.keras.layers.Dense(100, name='dense100_2')
-        self.dense2 = tf.keras.layers.Dense(2, name='dense2')
+        self.dense2 = tf.keras.layers.Dense(6, name='dense2')
          
 
 
@@ -314,6 +312,9 @@ class MyGNN(tf.keras.Model):
             x = self.acti_dense[i](x)
             x = self.dropout_dense[i](x)
         
+        x = tf.concat([x,xx[:,:,self.map_features['pfCand_px']:self.map_features['pfCand_E']+1]],axis = 2)
+        # print('check x shape: ', x.shape)
+
         x_shape = tf.shape(x)
         x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
         x = self.dense100(x)
@@ -322,42 +323,36 @@ class MyGNN(tf.keras.Model):
 
         # print('x final: ', x.shape)# (n_tau, 3) ou  (50, 100, 6)
 
-        # w = tf.math.exp(-x[:,:,-1])
-
         # ### 4-momentum:
-        # mypxs  = x[:,:,2] * w * x_mask
-        # mypys  = x[:,:,3] * w * x_mask
-        # mypzs  = x[:,:,4] * w * x_mask
-        # myEs   = x[:,:,5] * w * x_mask
+        mypx  = x[:,2]
+        mypy  = x[:,3]
+        mypz  = x[:,4]
+        myE   = x[:,5]
 
-        # mypx   = tf.reduce_sum(mypxs, axis = 1)
-        # mypy   = tf.reduce_sum(mypys, axis = 1)
-        # mypz   = tf.reduce_sum(mypzs, axis = 1)
-        # myE    = tf.reduce_sum(myEs , axis = 1)
+        mypx2  = tf.square(mypx)
+        mypy2  = tf.square(mypy)
+        mypz2  = tf.square(mypz)
+        myE2   = tf.square(myE)
 
-        # mypx2  = tf.square(mypx)
-        # mypy2  = tf.square(mypy)
-        # mypz2  = tf.square(mypz)
-
-        # mypt   = tf.sqrt(mypx2 + mypy2)
-        # mymass = tf.square(myE) - mypx2 - mypy2 - mypz2
-        # absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
+        mypt   = tf.sqrt(mypx2 + mypy2)
+        mymass = myE2 - mypx2 - mypy2 - mypz2
+        absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
 
         # ## for myeta and myphi:
-        # myphi = mypt*0.0
-        # myeta = mypt*0.0
+        myphi = 0.0
+        myeta = 0.0
 
-        # cosTheta = tf.where(absp==0, 1.0, mypz/absp)
-        # myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
-        # myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
+        cosTheta = tf.where(absp==0, 1.0, mypz/absp)
+        myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
+        myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
 
         # # charged and neutral number of hadrons
-        # mycharged = tf.math.reduce_sum(x[:,:,0] * w * x_mask, axis = 1)
-        # myneurals = tf.math.reduce_sum(x[:,:,1] * w * x_mask, axis = 1)
+        mycharged = x[:,0]
+        myneurals = x[:,1]
 
-        # xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
+        xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
 
-        xout = x
+        # xout = x
         return xout
 
 
@@ -493,18 +488,16 @@ class CustomMSE(keras.losses.Loss):
         super().__init__(name=name,**kwargs)
 
     def call(self, y_true, y_pred):
-        # w = [0.3, 0.14, 0.14, 0.14, 0.14, 0.14]
-        # print('\nLoss calculation:')
-        w = [1., 1, 1, 1, 1, 1]
-        # print('y_true.shape: ',y_true.shape)
-        # print('y_pred.shape: ',y_pred.shape)
-        mse1 = tf.math.reduce_mean(tf.square(y_true[:,0] - y_pred[:,0]))
-        mse2 = tf.math.reduce_mean(tf.square(y_true[:,1] - y_pred[:,1]))
-        # mse3 = tf.math.reduce_mean(tf.square(y_true[:,2] - y_pred[:,2]))
-        # mse4 = tf.math.reduce_mean(tf.square(y_true[:,3] - y_pred[:,3]))
-        # mse5 = tf.math.reduce_mean(tf.square(y_true[:,4] - y_pred[:,4]))
-        # mse6 = tf.math.reduce_mean(tf.square(y_true[:,5] - y_pred[:,5]))
-        return w[0]*mse1 + w[1]*mse2 #+ w[2]*mse3 + w[3]*mse4 + w[4]*mse5 + w[5]*mse6
+        def_mse = np.array([0.19904320783179388, 0.4982084664239762, 2.194362470631832,
+                   0.0007812506144594857, 0.047793857943109815, 0.5998682525160594])
+        w = 1/(6*def_mse)
+        mse1 = tf.square(y_true[:,0] - y_pred[:,0])
+        mse2 = tf.square(y_true[:,1] - y_pred[:,1])
+        mse3 = tf.square((y_true[:,2] - y_pred[:,2])/y_true[:,2])
+        mse4 = tf.square(y_true[:,3] - y_pred[:,3])
+        mse5 = tf.square(y_true[:,4] - y_pred[:,4])
+        mse6 = tf.square(y_true[:,5] - y_pred[:,5])
+        return w[0]*mse1 + w[1]*mse2 + w[2]*mse3 + w[3]*mse4 + w[4]*mse5 + w[5]*mse6
 
 
 class ValidationCallback(tf.keras.callbacks.Callback):
