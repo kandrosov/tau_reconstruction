@@ -47,12 +47,26 @@ def plot_metrics(history):
     axes[1].plot(epochs, hist["val_phi_res"], 'g*:', label="val_phi_res") 
     axes[1].plot(epochs, hist["val_eta_res"], 'm*:', label="val_eta_res") 
     axes[1].legend()
+
+    fig2, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
+    fig2.suptitle('mse') 
+    axes[0].set_xticks(np.arange(0, n_epoch, 1.0)) 
+    axes[0].plot(epochs, hist["my_mse_ch"], 'bo--', label="mse_ch")
+    axes[0].plot(epochs, hist["my_mse_neu"],'ro--', label="mse_neu") 
+    axes[0].plot(epochs, hist["my_mse_pt"], 'b*:',  label="mse_pt")
+    axes[0].legend()
+    axes[1].set_xticks(np.arange(0, n_epoch, 1.0)) 
+    axes[1].plot(epochs, hist["my_mse_mass"],'ro--',label="mse_mass") 
+    axes[1].plot(epochs, hist["my_mse_eta"], 'b*:', label="mse_eta") 
+    axes[1].plot(epochs, hist["my_mse_phi"], 'r*:', label="mse_phi")  
+    axes[1].legend()
     
 
     # pdf0 = pp.PdfPages("/data/cedrine/ModelTest/Metrics.pdf")
     pdf0 = pp.PdfPages("../Plots/Metrics.pdf")
     pdf0.savefig(fig0)
     pdf0.savefig(fig1)
+    pdf0.savefig(fig2)
     pdf0.close()
     plt.close()
 

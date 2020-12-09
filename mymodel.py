@@ -282,8 +282,8 @@ class MyGNN(tf.keras.Model):
             self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
             self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
         
-        self.dense100   = tf.keras.layers.Dense(100, name='dense100')
-        self.dense100_2 = tf.keras.layers.Dense(100, name='dense100_2')
+        self.dense100   = tf.keras.layers.Dense(100, activation = 'relu', kernel_initializer="he_uniform", bias_initializer="he_uniform", name='dense100')
+        self.dense100_2 = tf.keras.layers.Dense(100, activation = 'relu', kernel_initializer="he_uniform", bias_initializer="he_uniform", name='dense100_2')
         self.dense2 = tf.keras.layers.Dense(6, name='dense2')
          
 
@@ -398,6 +398,36 @@ def my_acc(y_true, y_pred):
     y_pred_int = tf.cast(y_pred, tf.int32)
     result = tf.math.logical_and(y_true_int[:, 0] == y_pred_int[:, 0], y_true_int[:, 1] == y_pred_int[:, 1])
     return tf.cast(result, tf.float32)
+
+def my_mse_ch(y_true, y_pred):
+    def_mse = 0.19904320783179388
+    w = 1/(6*def_mse)
+    return w*tf.square(y_true[:,0] - y_pred[:,0])
+
+def my_mse_neu(y_true, y_pred):
+    def_mse = np.array([0.4982084664239762])
+    w = 1/(6*def_mse)
+    return w*tf.square(y_true[:,1] - y_pred[:,1])
+
+def my_mse_pt(y_true, y_pred):
+    def_mse = 2.194362470631832
+    w = 1/(6*def_mse)
+    return w*tf.square((y_true[:,2] - y_pred[:,2])/y_true[:,2])
+
+def my_mse_eta(y_true, y_pred):
+    def_mse = 0.0007812506144594857
+    w = 1/(6*def_mse)
+    return w*tf.square(y_true[:,3] - y_pred[:,3])
+
+def my_mse_phi(y_true, y_pred):
+    def_mse = 0.047793857943109815
+    w = 1/(6*def_mse)
+    return w*tf.square(y_true[:,4] - y_pred[:,4])
+
+def my_mse_mass(y_true, y_pred):
+    def_mse = 0.5998682525160594
+    w = 1/(6*def_mse)
+    return w*tf.square(y_true[:,5] - y_pred[:,5])
 
 
 ### Resolution of 4-momentum:

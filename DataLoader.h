@@ -193,8 +193,8 @@ struct DataLoader {
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
                 
                 get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
-                get_x(Feature::pfCand_rel_phi)             = (tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) <= M_PI && (tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) > -M_PI ? tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi: (tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) > M_PI ? tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi - 2*M_PI : tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi + 2*M_PI;
-
+                get_x(Feature::pfCand_rel_phi)             = TVector2::Phi_mpi_pi(tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi);
+                
                 //////////////////////////////////////////////////////////////////////
                 ////// 4-momentum part:
                 if(pf_ind < tau.lepton_gen_vis_pt.size()){
