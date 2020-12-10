@@ -49,18 +49,21 @@ enum class Feature {
     pfCand_py                   = 26,
     pfCand_pz                   = 27,
     pfCand_E                    = 28,
-    pfCand_rel_eta              = 29,
-    pfCand_rel_phi              = 30,
+    jet_eta                     = 29,
+    jet_phi                     = 30,
+    pfCand_rel_eta              = 31,
+    pfCand_rel_phi              = 32,
 };
 
-string feature_names[31] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
+string feature_names[33] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
     "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
     "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
     "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
-    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E",
+    "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E","jet_eta","jet_phi",
     "pfCand_rel_eta","pfCand_rel_phi"};
 
-string y_label_names[6] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt", "eta", "phi", "m^2"};
+// string y_label_names[6] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt", "eta", "phi", "m^2"};
+string y_label_names[4] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt", "m^2"};
 
 struct DataLoader {
 
@@ -76,13 +79,13 @@ struct DataLoader {
     Long64_t current_entry; // number of the current entry
 
     static const size_t n_pf    = 50; // number of pf candidates per event
-    static const size_t n_fe    = 31;  // number of featurese per pf candidate
-    static const size_t n_label = 6;   // chanrged and neutral particle label
+    static const size_t n_fe    = 33;  // number of featurese per pf candidate
+    static const size_t n_label = 4;//6;   // chanrged and neutral particle label
 
     // Creation of map of features:
     std::map<std::string, int> MapCreation(){
         std::map<std::string, int> mapOfFeatures;
-        for(size_t i = 0; i <= 30; ++i){
+        for(size_t i = 0; i <= 32; ++i){
             mapOfFeatures[feature_names[i]] = i;
         }
         return mapOfFeatures;
@@ -90,7 +93,7 @@ struct DataLoader {
 
     std::map<std::string, int> MapCreationy(){
         std::map<std::string, int> mapOfy;
-        for(size_t i = 0; i <= 5; ++i){
+        for(size_t i = 0; i <= 3; ++i){
             mapOfy[y_label_names[i]] = i;
         }
         return mapOfy;
@@ -116,9 +119,9 @@ struct DataLoader {
             const bool def_bool = (tau.tau_decayModeFindingNewDMs > 0 && tau.tau_index >= 0);
             get_z(0) = def_bool ? tau.tau_decayMode : -1; 
             get_z(1) = def_bool ? tau.tau_pt   : 10000.0;
-            get_z(2) = def_bool ? tau.tau_eta  : 10.0;
-            get_z(3) = def_bool ? tau.tau_phi  : 10.0;
-            get_z(4) = def_bool ? tau.tau_mass : 10000.0;
+            // get_z(2) = def_bool ? tau.tau_eta  : 10.0;
+            // get_z(3) = def_bool ? tau.tau_phi  : 10.0;
+            get_z(2) = def_bool ? tau.tau_mass : 10000.0;
 
             ///////////////////////////////////////////////////////////////////////
             // Fill the labels:
@@ -137,8 +140,6 @@ struct DataLoader {
             std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
                 return tau.pfCand_pt.at(a) > tau.pfCand_pt.at(b);
             });
-            
-            TLorentzVector gen_p4(0, 0, 0, 0); // 4-momentum vector
 
             size_t test = n_pf; // doesn't work without this line
             size_t max_pf = std::min(test,indices.size());
@@ -191,26 +192,28 @@ struct DataLoader {
                 get_x(Feature::pfCand_dz_error)             = has_trk_details ? tau.pfCand_dz_error.at(pf_ind_sorted)      : def_val;
                 get_x(Feature::pfCand_track_chi2)           = has_trk_details ? tau.pfCand_track_chi2.at(pf_ind_sorted)    : def_val;
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
+
+                get_x(Feature::jet_eta)                     = tau.jet_eta;
+                get_x(Feature::jet_phi)                     = tau.jet_phi;
                 
                 get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
                 get_x(Feature::pfCand_rel_phi)             = TVector2::Phi_mpi_pi(tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi);
-                
-                //////////////////////////////////////////////////////////////////////
-                ////// 4-momentum part:
-                if(pf_ind < tau.lepton_gen_vis_pt.size()){
-                    TLorentzVector v1;
-                    v1.SetPtEtaPhiM(tau.lepton_gen_vis_pt.at(pf_ind) , tau.lepton_gen_vis_eta.at(pf_ind),
-                                    tau.lepton_gen_vis_phi.at(pf_ind),tau.lepton_gen_vis_mass.at(pf_ind));
-                    gen_p4 += v1;
-                }
+            }
+            ////// 4-momentum part:
+            TLorentzVector gen_p4(0, 0, 0, 0); // 4-momentum vector
+            for(size_t ind = 0; ind < tau.lepton_gen_vis_pt.size(); ++ind){
+                TLorentzVector v1;
+                v1.SetPtEtaPhiM(tau.lepton_gen_vis_pt.at(ind) , tau.lepton_gen_vis_eta.at(ind),
+                                tau.lepton_gen_vis_phi.at(ind),tau.lepton_gen_vis_mass.at(ind));
+                gen_p4 += v1;
             }
             if(current_entry == end_dataset){
                 tau_ind = n_tau;
             }
             get_y(2) = gen_p4.Pt();
-            get_y(3) = gen_p4.Eta();
-            get_y(4) = gen_p4.Phi();
-            get_y(5) = gen_p4.M()*gen_p4.M();
+            // get_y(3) = gen_p4.Eta();
+            // get_y(4) = gen_p4.Phi();
+            get_y(3) = gen_p4.M()*gen_p4.M();
         }
         return data;
     }

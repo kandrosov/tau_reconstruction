@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
 
-from mymodel_copy import *
+from mymodel import *
 from plotting import plot_res
 
 def make_sqrt(m):
@@ -14,18 +14,26 @@ def make_sqrt(m):
         m = -math.sqrt(-m)
     return m
 
-def evaluation():
+def evaluation(mode, filename, epoch_number):
     print('\nStart evaluation, load model and generator:\n')
     ##### Load the model:
-    custom_objects = {
-        "CustomMSE": CustomMSE,
-        "my_acc" : my_acc,
-        "pt_res" : pt_res,
-        "eta_res": eta_res,
-        "phi_res": phi_res,
-        "m2_res" : m2_res,
-    }
-    model = tf.keras.models.load_model("/data/cedrine/Models0/my_model_{}".format(3), custom_objects=custom_objects, compile=True)
+    if(mode== "dm"):
+        custom_objects = {
+            "CustomMSE": CustomMSE,
+            "my_acc" : my_acc,
+            "my_mse_ch"   : my_mse_ch,
+            "my_mse_neu"  : my_mse_neu,
+        }
+    elif(mode=="p4"):
+        custom_objects = {
+            "CustomMSE": CustomMSE,
+            "pt_res" : pt_res,
+            "m2_res" : m2_res,
+            "my_mse_pt"   : my_mse_pt,
+            "my_mse_mass" : my_mse_mass,
+        }
+
+    model = tf.keras.models.load_model(filename +"my_model_{}".format(epoch_number), custom_objects=custom_objects, compile=True)
     print("Model loaded.")
 
     generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)
@@ -89,52 +97,48 @@ def evaluation():
 
         for dm in true_dm:
             h_pt_tot.Fill((y_pred[l,2]-y_true[l,2])/y_true[l,2])
-            h_eta_tot.Fill(y_pred[l,3]-y_true[l,3])
-            h_phi_tot.Fill(y_pred[l,4]-y_true[l,4])
             def_h_pt_tot.Fill((z[l,1]-y_true[l,2])/y_true[l,2])
-            def_h_eta_tot.Fill(z[l,2]-y_true[l,3])
-            def_h_phi_tot.Fill(z[l,3]-y_true[l,4])
             
             if(dm==0):
-                m = make_sqrt(y_pred[l,5]) - math.sqrt(y_true[l,5])
+                m = make_sqrt(y_pred[l,3]) - math.sqrt(y_true[l,3])
                 h_m2_pi_tot.Fill(m)
-                m = z[l,4]- math.sqrt(y_true[l,5])
+                m = z[l,2]- math.sqrt(y_true[l,3])
                 def_h_m2_pi_tot.Fill(m)
             elif(dm==1 or dm==2 or dm==3):
-                m = make_sqrt(y_pred[l,5]) - math.sqrt(y_true[l,5])
+                m = make_sqrt(y_pred[l,3]) - math.sqrt(y_true[l,3])
                 h_m2_pi_0_tot.Fill(m)
-                m = z[l,4]-  math.sqrt(y_true[l,5])
+                m = z[l,2]-  math.sqrt(y_true[l,3])
                 def_h_m2_pi_0_tot.Fill(m)
             elif(dm==10 or dm==11 or dm==12):
-                m = make_sqrt(y_pred[l,5]) - math.sqrt(y_true[l,5])
+                m = make_sqrt(y_pred[l,3]) - math.sqrt(y_true[l,3])
                 h_m2_3pi_tot.Fill(m)
-                m = z[l,4]-  math.sqrt(y_true[l,5])
+                m = z[l,2]-  math.sqrt(y_true[l,3])
                 def_h_m2_3pi_tot.Fill(m)
             
             if(dm == pred_dm[l]):
                 if(dm==0):
-                    m = make_sqrt(y_pred[l,5]) - math.sqrt(y_true[l,5])
+                    m = make_sqrt(y_pred[l,3]) - math.sqrt(y_true[l,3])
                     c_h_m2_pi_tot.Fill(m)
                 elif(dm==1 or dm==2 or dm==3):
-                    m = make_sqrt(y_pred[l,5]) - math.sqrt(y_true[l,5])
+                    m = make_sqrt(y_pred[l,3]) - math.sqrt(y_true[l,3])
                     c_h_m2_pi_0_tot.Fill(m)
                 elif(dm==10 or dm==11 or dm==12):
-                    m = make_sqrt(y_pred[l,5]) - math.sqrt(y_true[l,5])
+                    m = make_sqrt(y_pred[l,3]) - math.sqrt(y_true[l,3])
                     c_h_m2_3pi_tot.Fill(m)
             
             if(dm == def_dm[l]):
                 if(dm==0):
-                    m = z[l,4] - math.sqrt(y_true[l,5])
+                    m = z[l,2] - math.sqrt(y_true[l,3])
                     c_def_h_m2_pi_tot.Fill(m)
                 elif(dm==1 or dm==2 or dm==3):
-                    m = z[l,4] - math.sqrt(y_true[l,5])
+                    m = z[l,2] - math.sqrt(y_true[l,3])
                     c_def_h_m2_pi_0_tot.Fill(m)
                 elif(dm==10 or dm==11 or dm==12):
-                    m = z[l,4] - math.sqrt(y_true[l,5])
+                    m = z[l,2] - math.sqrt(y_true[l,3])
                     c_def_h_m2_3pi_tot.Fill(m)
 
             l += 1
-        # print('ciao 2')
+        
         if conf_dm_mat is None:
             conf_dm_mat     = h_dm
             conf_dm_mat_old = h_dm_old
@@ -156,12 +160,6 @@ def evaluation():
     c1 = R.TCanvas( 'c1', '', 200, 10, 700, 500)
     legend1 = plot_res(h_pt_tot, def_h_pt_tot, "Relative difference for pt")
     legend1.Draw("SAMES")
-    c2 = R.TCanvas( 'c2', '', 200, 10, 700, 500)
-    legend2 = plot_res(h_eta_tot, def_h_eta_tot, "Absolute difference for eta")
-    legend2.Draw("SAMES")
-    c3 = R.TCanvas( 'c3', '', 200, 10, 700, 500)
-    legend3 = plot_res(h_phi_tot, def_h_phi_tot, "Absolute difference for phi")
-    legend3.Draw("SAMES")
     c4 = R.TCanvas( 'c4', '', 200, 10, 700, 500)
     legend4 = plot_res(h_m2_pi_tot, def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]")
     legend4.Draw("SAMES")
@@ -182,8 +180,6 @@ def evaluation():
     legend9.Draw("SAMES")
     c1.SaveAs('../Plots/h_p4_resolution.pdf[')
     c1.SaveAs('../Plots/h_p4_resolution.pdf')
-    c2.SaveAs('../Plots/h_p4_resolution.pdf')
-    c3.SaveAs('../Plots/h_p4_resolution.pdf')
     c4.SaveAs('../Plots/h_p4_resolution.pdf')
     c5.SaveAs('../Plots/h_p4_resolution.pdf')
     c6.SaveAs('../Plots/h_p4_resolution.pdf')

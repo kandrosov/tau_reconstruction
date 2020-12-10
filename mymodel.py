@@ -5,19 +5,19 @@ from tensorflow import keras
 import json
 from ROOT import TLorentzVector
 import math
-# import spektral
-# import matplotlib.pyplot as plt
+
 
 ### All the parameters:
 n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 50 #100 # number of pf candidates per event
-n_fe     = 31   # total muber of features: 24
-n_labels = 6    # number of labels per event
-n_epoch  = 5 #100  # number of epochs on which to train
+n_fe     = 33   # total muber of features: 24
+n_labels = 4#6    # number of labels per event
+n_epoch  = 2 #100  # number of epochs on which to train
 n_steps_val   = 10 #14213
-n_steps_test  = 100 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_steps_test  = 10000 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 10000 #6396973 # total number of events in the dataset = 14'215'297
+n_batch_training = 10
+entry_stop    = n_batch_training*100 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -25,15 +25,23 @@ entry_stop_val   = entry_stop + n_tau*n_steps_val + 1
 entry_start_test = entry_stop_val+1
 entry_stop_test  = entry_stop_val + n_tau*n_steps_test + 1
 
-print('Training')
-print('Entry_start: ', entry_start)
-print('Entry_stop: ', entry_stop)
-print('\nValidation')
-print('Entry_start_val:', entry_start_val)
-print('Entry_stop_val: ',entry_stop_val)
-print('\nTest')
-print('Entry_start_test: ', entry_start_test)
-print('Entry_stop_test (<= 14215297): ',entry_stop_test)
+print('\n********************************************************')
+print('****************** Parameters **************************')
+print('********************************************************')
+print('Batch size: ', n_tau)
+print('Number of batches in training: ', n_batch_training)
+print('Number of batches in validation: ', n_steps_val)
+print('********************************************************')
+print('********************************************************')
+print('********************************************************')
+print('Security checks:')
+print('Training start entry: ', entry_start)
+print('Training stop entry: ', entry_stop)
+print('Validation start entry:', entry_start_val)
+print('Validation stop entry: ',entry_stop_val)
+print('Test start entry: ', entry_start_test)
+print('Test stop entry (<= 14215297): ',entry_stop_test,'\n')
+
 
 
 class StdLayer(tf.keras.layers.Layer):
@@ -205,21 +213,11 @@ class MyGNNLayer(tf.keras.layers.Layer):
         rep = tf.stack([1,x_shape[1],1])
         a   = tf.tile(x, rep)
         a   = tf.reshape(a,(x_shape[0],x_shape[1],x_shape[1],x_shape[2]))
-        # print('a1 = a2: ', a[:,1,1,:]==a[:,10,1,:])
-        # print('a1 != a3: ', a[:,1,1,:]==a[:,1,10,:])
-        # if(tf.math.reduce_all(a[:,1,1,:]==a[:,23,1,:])==True): print('yes1!!!')
-        # if(tf.math.reduce_all(a[:,1,1,:]==a[:,1,23,:])==True): print('no1!!!')
         
         ## b tensor:
         rep = tf.stack([1,1,x_shape[1]])
         b   = tf.tile(x, rep)
         b   = tf.reshape(b,(x_shape[0],x_shape[1],x_shape[1],x_shape[2]))
-        # print('b1 = b2: ', b[:,1,1,:]==b[:,1,10,:])
-        # print('b1 != b3: ', b[:,1,1,:]==b[:,10,1,:])
-        # print('a = b: ',a[:,1,10,:]==b[:,10,1,:])
-        # if(tf.math.reduce_all(b[:,1,1,:] ==b[:,1,34,:])==True): print('yes2!!!')
-        # if(tf.math.reduce_all(b[:,1,1,:] ==b[:,34,1,:])==True): print('no2!!!')
-        # if(tf.math.reduce_all(a[:,1,34,:]==b[:,34,1,:])==True): print('yes3!!!')
 
 
         ### Compute distances:
@@ -259,9 +257,19 @@ class MyGNNLayer(tf.keras.layers.Layer):
 
 class MyGNN(tf.keras.Model):
 
-    def __init__(self, map_features, **kwargs):
+    def __init__(self, mode, map_features, filename, parameters, **kwargs):
         super(MyGNN, self).__init__(**kwargs)
         self.map_features = map_features
+        self.mode = mode
+        self.filename = filename
+        # parameters = [n_gnn_layers,n_dim_gnn, n_output_gnn, n_output_gnn_last, n_dense_layers, n_dense_nodes, wiring_mode]
+        self.n_gnn_layers      = parameters[0]
+        self.n_dim_gnn         = parameters[1]
+        self.n_output_gnn      = parameters[2]
+        self.n_output_gnn_last = parameters[3]
+        self.n_dense_layers    = parameters[4]
+        self.n_dense_nodes     = parameters[5]
+        self.wiring_mode       = parameters[6]
 
         self.embedding1   = tf.keras.layers.Embedding(350,2)
         self.embedding2   = tf.keras.layers.Embedding(4  ,2)
@@ -270,21 +278,32 @@ class MyGNN(tf.keras.Model):
         self.scale        = ScaleLayer('min_max.txt', map_features, [-1,1], name='scale_layer')
 
         self.GNN_layers = []
-        self.dropout_dense = []
-        self.batch_norm_dense = []
-        self.acti_dense = []
+        self.batch_norm = []
+        self.acti_gnn   = []
+        self.dense      = []
+
+        list_outputs = [self.n_output_gnn] * (self.n_gnn_layers-1) + [self.n_output_gnn_last]
+        list_n_dim   = [2] + [self.n_dim_gnn] * (self.n_gnn_layers-1)
+        self.n_gnn_layers = len(list_outputs)
+        self.n_dense_layers = self.n_dense_layers
+
+        if(mode=="dm"): 
+            acti = "tanh"
+            acti_den = "sigmoid"
+        else:
+            acti = "relu"
+            acti_den = "relu"
+
+        for i in range(self.n_gnn_layers):
+            self.GNN_layers.append(MyGNNLayer(n_dim=list_n_dim[i], num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
+            self.batch_norm.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
+            self.acti_gnn.append(tf.keras.layers.Activation(acti, name='acti_gnn_{}'.format(i)))
         
-        list_outputs = [100] * 9 + [10]
-        self.n_layers = len(list_outputs)
-        for i in range(0,self.n_layers):
-            self.GNN_layers.append(MyGNNLayer(n_dim=2, num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
-            self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
-            self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
-            self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
-        
-        self.dense100   = tf.keras.layers.Dense(100, activation = 'relu', kernel_initializer="he_uniform", bias_initializer="he_uniform", name='dense100')
-        self.dense100_2 = tf.keras.layers.Dense(100, activation = 'relu', kernel_initializer="he_uniform", bias_initializer="he_uniform", name='dense100_2')
-        self.dense2 = tf.keras.layers.Dense(6, name='dense2')
+        for i in range(self.n_dense_layers-1):
+            self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, activation = acti_den, kernel_initializer="he_uniform", 
+                                bias_initializer="he_uniform", name='dense_{}'.format(i)))
+        self.dense2 = tf.keras.layers.Dense(2, name='dense2')
+
          
 
 
@@ -302,32 +321,73 @@ class MyGNN(tf.keras.Model):
         x_part2 = x[:,:,(self.map_features["pfCand_fromPV"]+1):]
         x = tf.concat((x_em1,x_em2,x_em3,x_part1,x_part2),axis = 2)
 
-        for i in range(0,self.n_layers):
-            if i > 1:
-                x = tf.concat([x0, x], axis=2)
-            x = self.GNN_layers[i](x, mask=x_mask)
-            if i == 0: 
-                x0 = x
-            x = self.batch_norm_dense[i](x)
-            x = self.acti_dense[i](x)
-            x = self.dropout_dense[i](x)
+        if(self.wiring_mode=="m2"):
+            for i in range(self.n_gnn_layers):
+                if i > 1:
+                    x = tf.concat([x0, x], axis=2)
+                x = self.GNN_layers[i](x, mask=x_mask)
+                if i == 0: 
+                    x0 = x
+                x = self.batch_norm[i](x)
+                x = self.acti_gnn[i](x)
+        elif(self.wiring_mode=="m1"):
+            for i in range(self.n_gnn_layers):
+                x = self.GNN_layers[i](x, mask=x_mask)
+                x = self.batch_norm[i](x)
+                x = self.acti_gnn[i](x)
+        elif(self.wiring_mode=="m3"):
+            for i in range(self.n_gnn_layers):
+                if(i%3==0 and i > 0):
+                    x = tf.concat([x0, x], axis=2)
+                x = self.GNN_layers[i](x, mask=x_mask)
+                if(i%3==0): 
+                    x0 = x
+                x = self.batch_norm[i](x)
+                x = self.acti_gnn[i](x)
         
-        x = tf.concat([x,xx[:,:,self.map_features['pfCand_px']:self.map_features['pfCand_E']+1]],axis = 2)
-        # print('check x shape: ', x.shape)
 
-        x_shape = tf.shape(x)
-        x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
-        x = self.dense100(x)
-        x = self.dense100_2(x)
+
+        if(self.mode == "p4"):
+            xx_p4 = xx[:,:,self.map_features['pfCand_px']:self.map_features['pfCand_E']+1]
+            xx_p4_shape = tf.shape(xx_p4)
+            xx_p4_other = xx[:,:,self.map_features['pfCand_pt']:self.map_features['pfCand_mass']+1]
+            
+            x_coor = x[:,:, -self.n_dim_gnn:]
+            x_coor = tf.math.square(x_coor)
+            d = tf.sqrt(tf.square(tf.math.reduce_sum(scx, axis = -1)))
+            w = tf.reshape(tf.math.exp(-10*d), (xx_p4_shape[0], xx_p4_shape[1], 1))
+
+            sum_p4 = tf.reduce_sum(xx_p4 * w, axis=1)
+            # print('sum_p4.shape: ', sum_p4.shape) #(100,4)
+            sum_p4_other = self.ToPtM2(sum_p4)
+
+            x = tf.concat([x, xx_p4, xx_p4_other], axis = 2)
+
+
+            #xx_p4 = tf.reshape(xx_p4, (xx_p4_shape[0], xx_p4_shape[1] * xx_p4_shape[2]))
+            x_shape = tf.shape(x)
+            x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
+            x = tf.concat([x, sum_p4, sum_p4_other], axis = 1)
+        else:
+            x_shape = tf.shape(x)
+            x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
+        
+
+        for i in range(self.n_dense_layers-1):
+            x = self.dense[i](x)
         x = self.dense2(x)
 
-        # print('x final: ', x.shape)# (n_tau, 3) ou  (50, 100, 6)
+        x_zeros = tf.zeros((x_shape[0], 2))
+        if(self.mode == "dm"): xout = tf.concat([x, x_zeros], axis=1)
+        else: xout = tf.concat([x_zeros, x], axis=1)
+        
+        return xout
 
-        # ### 4-momentum:
-        mypx  = x[:,2]
-        mypy  = x[:,3]
-        mypz  = x[:,4]
-        myE   = x[:,5]
+    def ToPtM2(self, x):
+        mypx  = x[:,0]
+        mypy  = x[:,1]
+        mypz  = x[:,2]
+        myE   = x[:,3]
 
         mypx2  = tf.square(mypx)
         mypy2  = tf.square(mypy)
@@ -338,22 +398,7 @@ class MyGNN(tf.keras.Model):
         mymass = myE2 - mypx2 - mypy2 - mypz2
         absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
 
-        # ## for myeta and myphi:
-        myphi = 0.0
-        myeta = 0.0
-
-        cosTheta = tf.where(absp==0, 1.0, mypz/absp)
-        myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
-        myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
-
-        # # charged and neutral number of hadrons
-        mycharged = x[:,0]
-        myneurals = x[:,1]
-
-        xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
-
-        # xout = x
-        return xout
+        return tf.stack([mypt,mymass], axis=1)
 
 
 ### Function that creates generators:
@@ -374,10 +419,8 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
                 if z == True:
                     z_np = np.asarray(data.z)
                     z_2d = z_np.reshape((n_tau, n_labels-1))
-                    # yield x_3d, y_2d[:, 0:2], z_2d
                     yield x_3d, y_2d, z_2d
                 else:
-                    # yield x_3d, y_2d[:, 0:2]
                     yield x_3d, y_2d
             ++cnt
             if cnt == 100:
@@ -401,33 +444,23 @@ def my_acc(y_true, y_pred):
 
 def my_mse_ch(y_true, y_pred):
     def_mse = 0.19904320783179388
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square(y_true[:,0] - y_pred[:,0])
 
 def my_mse_neu(y_true, y_pred):
     def_mse = np.array([0.4982084664239762])
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square(y_true[:,1] - y_pred[:,1])
 
 def my_mse_pt(y_true, y_pred):
-    def_mse = 2.194362470631832
-    w = 1/(6*def_mse)
-    return w*tf.square((y_true[:,2] - y_pred[:,2])/y_true[:,2])
-
-def my_mse_eta(y_true, y_pred):
-    def_mse = 0.0007812506144594857
-    w = 1/(6*def_mse)
-    return w*tf.square(y_true[:,3] - y_pred[:,3])
-
-def my_mse_phi(y_true, y_pred):
-    def_mse = 0.047793857943109815
-    w = 1/(6*def_mse)
-    return w*tf.square(y_true[:,4] - y_pred[:,4])
+    def_mse = 37.541533469830576#2.194362470631832
+    w = 1/def_mse
+    return w*tf.square(y_true[:,2] - y_pred[:,2])
 
 def my_mse_mass(y_true, y_pred):
     def_mse = 0.5998682525160594
-    w = 1/(6*def_mse)
-    return w*tf.square(y_true[:,5] - y_pred[:,5])
+    w = 1/def_mse
+    return w*tf.square(y_true[:,3] - y_pred[:,3])
 
 
 ### Resolution of 4-momentum:
@@ -450,8 +483,6 @@ class MyResolution(tf.keras.metrics.Metric):
             self.sum_x2.assign_add(tf.math.reduce_sum((y_pred[:,self.var_pos] - y_true[:,self.var_pos])**2))
 
     def result(self):
-        # tf.print('\nN: ',self.N)
-        # tf.print('Sum_x: ',self.sum_x)
         mean_x  = self.sum_x/self.N
         mean_x2 = self.sum_x2/self.N
         return mean_x2 -  mean_x**2
@@ -475,26 +506,13 @@ class MyResolution(tf.keras.metrics.Metric):
         raise RuntimeError("Im here")
         return MyResolution(config["name"], config["var_pos"], is_relative=config["is_relative"])
 
-pt_res_obj  = MyResolution('pt_res' , 2 ,True)
-eta_res_obj = MyResolution('eta_res', 3 ,False)
-phi_res_obj = MyResolution('phi_res', 4 ,False)
-m2_res_obj  = MyResolution('m^2_res', 5 ,False)
+pt_res_obj  = MyResolution('pt_res' , 2 ,False)
+m2_res_obj  = MyResolution('m^2_res', 3 ,False)
 
 def pt_res(y_true, y_pred, sample_weight=None):
-    # print('\npt_res calculation:')
     global pt_res_obj
     pt_res_obj.update_state(y_true, y_pred)
     return pt_res_obj.result()
-
-def eta_res(y_true, y_pred, sample_weight=None):
-    global eta_res_obj
-    eta_res_obj.update_state(y_true, y_pred)
-    return eta_res_obj.result()
-
-def phi_res(y_true, y_pred, sample_weight=None):
-    global phi_res_obj
-    phi_res_obj.update_state(y_true, y_pred)
-    return phi_res_obj.result()
 
 def m2_res(y_true, y_pred, sample_weight=None):
     global m2_res_obj
@@ -514,32 +532,31 @@ def decay_mode_histo(x1, x2, dm_bins):
 
 ##### Custom loss function:
 class CustomMSE(keras.losses.Loss):
-    def __init__(self, name="custom_mse",**kwargs):
+    def __init__(self, mode, name="custom_mse",**kwargs):
         super().__init__(name=name,**kwargs)
+        self.mode = mode
 
     def call(self, y_true, y_pred):
-        def_mse = np.array([0.19904320783179388, 0.4982084664239762, 2.194362470631832,
-                   0.0007812506144594857, 0.047793857943109815, 0.5998682525160594])
-        w = 1/(6*def_mse)
-        mse1 = tf.square(y_true[:,0] - y_pred[:,0])
-        mse2 = tf.square(y_true[:,1] - y_pred[:,1])
-        mse3 = tf.square((y_true[:,2] - y_pred[:,2])/y_true[:,2])
-        mse4 = tf.square(y_true[:,3] - y_pred[:,3])
-        mse5 = tf.square(y_true[:,4] - y_pred[:,4])
-        mse6 = tf.square(y_true[:,5] - y_pred[:,5])
-        return w[0]*mse1 + w[1]*mse2 + w[2]*mse3 + w[3]*mse4 + w[4]*mse5 + w[5]*mse6
+        if(self.mode == "dm"):
+            def_mse = np.array([0.19904320783179388, 0.4982084664239762])
+            w = 1/def_mse
+            mse1 = tf.square(y_true[:,0] - y_pred[:,0])
+            mse2 = tf.square(y_true[:,1] - y_pred[:,1])
+            return w[0]*mse1 + w[1]*mse2
+        elif(self.mode=="p4"):
+            def_mse = np.array([37.541533469830576, 0.5998682525160594])
+            w = 1/def_mse
+            mse3 = tf.square(y_true[:,2] - y_pred[:,2])
+            mse4 = tf.square(y_true[:,3] - y_pred[:,3])
+            return w[0]*mse3 + w[1]*mse4
 
 
 class ValidationCallback(tf.keras.callbacks.Callback):
     def on_epoch_begin(self, epoch, logs=None):
         ### Reset the variables of class MyResolution:
         global pt_res_obj
-        global eta_res_obj
-        global phi_res_obj
         global m2_res_obj
         pt_res_obj.reset()
-        eta_res_obj.reset()
-        phi_res_obj.reset()
         m2_res_obj.reset()
         print('Resolution reset done\n')
 
@@ -549,7 +566,7 @@ class ValidationCallback(tf.keras.callbacks.Callback):
         print("\nValidation:")
         generator_val, n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val)
         myresults = self.model.evaluate(x = tf.data.Dataset.from_generator(generator_val,(tf.float32, tf.float32),\
-                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,6]))), batch_size = n_batches_val, steps = n_steps_val)
+                            (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,4]))), batch_size = n_batches_val, steps = n_steps_val)
         if len(self.model.metrics_names) == 1:
             i = self.model.metrics_names[0]
             logs["val_"+i] = myresults
@@ -558,25 +575,8 @@ class ValidationCallback(tf.keras.callbacks.Callback):
             for i in self.model.metrics_names:
                 logs["val_"+i] = myresults[cnt]
                 cnt += 1
-        # print('Validation finished.')
+    
         ### Save the entire models:
-        self.model.save("/data/cedrine/ModelTest/my_model_{}".format(epoch+1),save_format='tf')
+        self.model.save(self.model.filename+"my_model_{}".format(epoch+1),save_format='tf')
         print('Model is saved.')
          
-
-callbacks = [
-    tf.keras.callbacks.EarlyStopping(
-        monitor   = 'val_loss',
-        min_delta = 0, # Minimum change in the monitored quantity to qualify as an improvement
-        patience  = 5, # Number of epochs with no improvement after which training will be stopped
-        verbose   = 0,
-        mode      = 'min', # it will stop when the quantity monitored has stopped decreasing
-        baseline  = None,
-        restore_best_weights = False,
-    ),
-    tf.keras.callbacks.CSVLogger(
-        filename  = '/data/cedrine/ModelTest/log0.csv',
-        separator = ',',
-        append    = False,
-    )
-]
