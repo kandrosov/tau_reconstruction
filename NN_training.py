@@ -60,7 +60,7 @@ parameters = {
       "n_gnn_layers": 10,
       "n_dim_gnn": 2,
       "n_output_gnn": 100,
-      "n_output_gnn_last": 10,
+      "n_output_gnn_last": 15,
       "n_dense_layers": 4,
       "n_dense_nodes": 100,
       "wiring_mode": "m2",

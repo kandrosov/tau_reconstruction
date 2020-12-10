@@ -85,7 +85,7 @@ def plot_metrics(history, mode):
 
 
 ### Plots the confusion matrix of decay modes:
-def plt_conf_dm(conf_dm_mat, old = False):
+def plt_conf_dm(conf_dm_mat, filename, old = False):
     x_axis_labels = ['$\pi^{\pm}$','$\pi^{\pm} + \pi^0$', '$\pi^{\pm} + 2\pi^0$', \
                  '$\pi^{\pm} + 3\pi^0$','$3\pi^{\pm}$', '$3\pi^{\pm} + 1\pi^0$',\
                  '$3\pi^{\pm} + 2\pi^0$', 'others'] # labels for x-axis
@@ -102,9 +102,9 @@ def plt_conf_dm(conf_dm_mat, old = False):
         plt.xlabel('Default tau reconstruction',fontsize = 16)
     plt.tight_layout()
     if old == False:
-        plt.savefig("../Plots/conf_dm_mat.pdf")
+        plt.savefig(filename+"conf_dm_mat_predicted.pdf")
     else: 
-        plt.savefig("../Plots/conf_dm_mat_old.pdf")
+        plt.savefig(filename+"conf_dm_mat_default.pdf")
 
     # ### check the true distribution of the decay modes:
     # tot_dm = conf_dm_mat.sum(axis=1)
@@ -112,7 +112,7 @@ def plt_conf_dm(conf_dm_mat, old = False):
     # tot_dm_norm = tot_dm/tot_dm.sum()
     # print('Probabilities of decay mode for true: \n',tot_dm_norm,'\n')
 
-def accuracy_calc(conf_dm_mat, old = False):
+def accuracy_calc(conf_dm_mat, filename, old = False):
     ## Normalization of cond_dm_mat:
     conf_dm_mat_norm = conf_dm_mat
     for i in range(0,len(conf_dm_mat[0,:])):
@@ -139,24 +139,22 @@ def accuracy_calc(conf_dm_mat, old = False):
     plt.tight_layout()
     # plt.show()
     if(old==False):
-        pdf = pp.PdfPages("../Plots/conf_dm_mat_norm.pdf")
+        pdf = pp.PdfPages(filename+"conf_dm_mat_norm_predicted.pdf")
     else:
-        pdf = pp.PdfPages("../Plots/conf_dm_mat_norm_old.pdf")
+        pdf = pp.PdfPages(filename+"conf_dm_mat_norm_default.pdf")
     pdf.savefig(fig)
     pdf.close()
     plt.close()
 
     ## Accuracy extraction for important decay modes:
     accuracy = np.zeros(8)
-    # weights = np.array([0.1151, 0.2593, 0.1081, 0.0118, 0.0980, 0.0476, 0.0051, 0.0029])
-    # weights = weights/weights.sum()
     accuracy_value = 0
     for i in range(0,8):
         accuracy[i] = conf_dm_mat_norm[i,i]
-        # accuracy_value += weights[i]*accuracy[i]
         accuracy_value += accuracy[i]
 
     return accuracy_value
+
 
 def plot_res(h, def_h, xlabelname, c_dm = False):
     def_h.SetXTitle(xlabelname)
