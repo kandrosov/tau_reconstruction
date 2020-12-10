@@ -293,7 +293,7 @@ class MyGNN(tf.keras.Model):
 
         for i in range(self.n_gnn_layers):
             self.GNN_layers.append(MyGNNLayer(n_dim=list_n_dim[i], num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
-            # self.batch_norm.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
+            self.batch_norm.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
             self.acti_gnn.append(tf.keras.layers.Activation("tanh", name='acti_gnn_{}'.format(i)))
         
         for i in range(self.n_dense_layers-1):
@@ -326,7 +326,7 @@ class MyGNN(tf.keras.Model):
                 x = self.GNN_layers[i](x, mask=x_mask)
                 if i == 0: 
                     x0 = x
-                # x = self.batch_norm[i](x)
+                x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
         elif(self.wiring_mode=="m1"):
             for i in range(self.n_gnn_layers):
