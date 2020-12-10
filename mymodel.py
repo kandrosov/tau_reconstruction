@@ -280,6 +280,8 @@ class MyGNN(tf.keras.Model):
         self.batch_norm = []
         self.acti_gnn   = []
         self.dense      = []
+        self.dense_batch_norm = []
+        self.dense_acti = []
 
         list_outputs = [self.n_output_gnn] * (self.n_gnn_layers-1) + [self.n_output_gnn_last]
         list_n_dim   = [2] + [self.n_dim_gnn] * (self.n_gnn_layers-1)
@@ -297,8 +299,10 @@ class MyGNN(tf.keras.Model):
             self.acti_gnn.append(tf.keras.layers.Activation("tanh", name='acti_gnn_{}'.format(i)))
         
         for i in range(self.n_dense_layers-1):
-            self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, activation = acti_den, kernel_initializer="he_uniform", 
+            self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, kernel_initializer="he_uniform", 
                                 bias_initializer="he_uniform", name='dense_{}'.format(i)))
+            self.dense_batch_norm.append(tf.keras.layers.BatchNormalization(name='dense_batch_normalization_{}'.format(i)))
+            self.dense_acti.append(tf.keras.layers.Activation(acti_den, name='dense_acti{}'.format(i)))
         self.dense2 = tf.keras.layers.Dense(2, name='dense2')
 
          
@@ -374,6 +378,8 @@ class MyGNN(tf.keras.Model):
 
         for i in range(self.n_dense_layers-1):
             x = self.dense[i](x)
+            x = self.dense_batch_norm[i](x)
+            x = self.dense_acti[i](x)
         x = self.dense2(x)
 
         x_zeros = tf.zeros((x_shape[0], 2))
