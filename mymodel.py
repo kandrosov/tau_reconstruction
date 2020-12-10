@@ -331,7 +331,7 @@ class MyGNN(tf.keras.Model):
         elif(self.wiring_mode=="m1"):
             for i in range(self.n_gnn_layers):
                 x = self.GNN_layers[i](x, mask=x_mask)
-                # x = self.batch_norm[i](x)
+                x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
         elif(self.wiring_mode=="m3"):
             for i in range(self.n_gnn_layers):
@@ -340,7 +340,7 @@ class MyGNN(tf.keras.Model):
                 x = self.GNN_layers[i](x, mask=x_mask)
                 if(i%3==0): 
                     x0 = x
-                # x = self.batch_norm[i](x)
+                x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
 
 
