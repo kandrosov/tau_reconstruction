@@ -14,7 +14,7 @@ if gpus:
   try:
     tf.config.experimental.set_virtual_device_configuration(
         gpus[0],
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8000)]) # ca. 50% => uses effectively 7921MB
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6000)]) # ca. 50% => uses effectively 7921MB
     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:
@@ -25,6 +25,8 @@ if gpus:
 ##################################################################################
 ##################################################################################
 import ROOT as R
+import os
+import sys
 
 R.gInterpreter.ProcessLine('#include "DataLoader.h"')
 
@@ -42,7 +44,18 @@ if args.mode:
       _mode = args.mode
 else:
       _mode = "dm"
-_filename = args.output_filename#"/data/cedrine/ModelTest2/test_" # + "mymodel_{}".format(epoch+1) or + "log0.cvs"
+_filename = args.output_filename #"/data/results/run1/" # + "mymodel_{}".format(epoch+1) or + "log0.cvs"
+
+
+# define the name of the directory to be created
+try:
+    os.mkdir(_filename)
+except OSError:
+    print ("Creation of the directory %s failed" % _filename)
+    sys.exit()
+else:
+    print ("Successfully created the directory %s " % _filename)
+
 parameters = {
       "n_gnn_layers": 10,
       "n_dim_gnn": 2,
