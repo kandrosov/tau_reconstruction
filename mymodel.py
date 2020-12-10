@@ -13,11 +13,11 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 31   # total muber of features: 24
 n_labels = 6    # number of labels per event
-n_epoch  = 5 #100  # number of epochs on which to train
-n_steps_val   = 10 #14213
+n_epoch  = 10 #100  # number of epochs on which to train
+n_steps_val   = 100 #14213
 n_steps_test  = 100 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-entry_stop    = 10000 #6396973 # total number of events in the dataset = 14'215'297
+entry_stop    = 100000 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
@@ -114,13 +114,13 @@ class MyModel(tf.keras.Model):
         self.dropout_dense = []
         self.batch_norm_dense = []
         self.acti_dense = []
-        
+
         for i in range(0,self.n_layers):
             self.dense.append(tf.keras.layers.Dense(3600, name='dense_{}'.format(i)))
             self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
             self.acti_dense.append(tf.keras.layers.Activation('relu', name='acti_dense_{}'.format(i)))
             self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
-        
+
         self.output_layer_2   = tf.keras.layers.Dense(2  , name='output_layer_2')
         self.output_layer_100 = tf.keras.layers.Dense(100, name='output_layer_100', activation='softmax')
 
@@ -192,7 +192,7 @@ class MyGNNLayer(tf.keras.layers.Layer):
         self.A = self.add_weight("A", shape=((input_shape[-1]+1) * 2, self.num_outputs),
                                 initializer="he_uniform", trainable=True)
         self.b = self.add_weight("b", shape=(self.num_outputs,), initializer="he_uniform", trainable=True)
-    
+
     def compute_output_shape(self, input_shape):
         return [input_shape[0], input_shape[1], self.num_outputs]
 
@@ -209,7 +209,7 @@ class MyGNNLayer(tf.keras.layers.Layer):
         # print('a1 != a3: ', a[:,1,1,:]==a[:,1,10,:])
         # if(tf.math.reduce_all(a[:,1,1,:]==a[:,23,1,:])==True): print('yes1!!!')
         # if(tf.math.reduce_all(a[:,1,1,:]==a[:,1,23,:])==True): print('no1!!!')
-        
+
         ## b tensor:
         rep = tf.stack([1,1,x_shape[1]])
         b   = tf.tile(x, rep)
@@ -233,8 +233,9 @@ class MyGNNLayer(tf.keras.layers.Layer):
         na   = tf.concat((a,dist),axis=-1)
 
 
-        ### Weighted sum of features: 
+        ### Weighted sum of features:
         w = tf.math.exp(-10*na[:,:,:,-1]) # weights
+        #w = 1 - na[:,:,:,-1]
         w_shape = tf.shape(w)
         w    = tf.reshape(w,(w_shape[0],w_shape[1],w_shape[2],1)) # needed for multiplication
         mask = tf.reshape(mask, (w_shape[0],w_shape[1],1)) # needed for multiplication
@@ -263,9 +264,9 @@ class MyGNN(tf.keras.Model):
         super(MyGNN, self).__init__(**kwargs)
         self.map_features = map_features
 
-        self.embedding1   = tf.keras.layers.Embedding(350,2)
-        self.embedding2   = tf.keras.layers.Embedding(4  ,2)
-        self.embedding3   = tf.keras.layers.Embedding(8  ,2)
+        self.embedding1   = tf.keras.layers.Embedding(350,3)
+        self.embedding2   = tf.keras.layers.Embedding(4  ,3)
+        self.embedding3   = tf.keras.layers.Embedding(8  ,3)
         self.normalize    = StdLayer('mean_std.txt', map_features, 5, name='std_layer')
         self.scale        = ScaleLayer('min_max.txt', map_features, [-1,1], name='scale_layer')
 
@@ -273,19 +274,32 @@ class MyGNN(tf.keras.Model):
         self.dropout_dense = []
         self.batch_norm_dense = []
         self.acti_dense = []
-        
+
         list_outputs = [100] * 9 + [10]
         self.n_layers = len(list_outputs)
         for i in range(0,self.n_layers):
-            self.GNN_layers.append(MyGNNLayer(n_dim=2, num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
+            n_dim = 2 if i == 0 else 3
+            self.GNN_layers.append(MyGNNLayer(n_dim=n_dim, num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
             self.batch_norm_dense.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
             self.acti_dense.append(tf.keras.layers.Activation('tanh', name='acti_dense_{}'.format(i)))
-            self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
-        
-        self.dense100   = tf.keras.layers.Dense(100, activation = 'relu', kernel_initializer="he_uniform", bias_initializer="he_uniform", name='dense100')
-        self.dense100_2 = tf.keras.layers.Dense(100, activation = 'relu', kernel_initializer="he_uniform", bias_initializer="he_uniform", name='dense100_2')
-        self.dense2 = tf.keras.layers.Dense(6, name='dense2')
-         
+            #self.dropout_dense.append(tf.keras.layers.Dropout(0.25,name='dropout_dense_{}'.format(i)))
+
+        # self.dense_p4 = []
+        # n_dense_p4 = 4
+        # for i in range(n_dense_p4):
+        #     self.dense_p4.append(tf.keras.layers.Dense(100, activation = 'relu', kernel_initializer="he_uniform",
+        #                                                bias_initializer="he_uniform", name='dense_p4_{}'.format(i)))
+        # self.dense_p4_last = tf.keras.layers.Dense(4, kernel_initializer="he_uniform",
+        #                                               bias_initializer="he_uniform", name='p4_output')
+
+        self.dense_dm = []
+        n_dense_dm = 4
+        for i in range(n_dense_dm):
+            self.dense_dm.append(tf.keras.layers.Dense(100, activation = 'sigmoid', kernel_initializer="he_uniform",
+                                                       bias_initializer="he_uniform", name='dense_dm_{}'.format(i)))
+        self.dense_dm_last = tf.keras.layers.Dense(2, kernel_initializer="he_uniform",
+                                                   bias_initializer="he_uniform", name='dm_output')
+
 
 
     @tf.function
@@ -306,28 +320,88 @@ class MyGNN(tf.keras.Model):
             if i > 1:
                 x = tf.concat([x0, x], axis=2)
             x = self.GNN_layers[i](x, mask=x_mask)
-            if i == 0: 
+            if i == 0:
                 x0 = x
             x = self.batch_norm_dense[i](x)
             x = self.acti_dense[i](x)
-            x = self.dropout_dense[i](x)
-        
-        x = tf.concat([x,xx[:,:,self.map_features['pfCand_px']:self.map_features['pfCand_E']+1]],axis = 2)
-        # print('check x shape: ', x.shape)
+            #x = self.dropout_dense[i](x)
 
+        x_last_gnn = x
+
+        print('check x shape: ', x.shape)
+        xx_p4 = xx[:,:,self.map_features['pfCand_px']:self.map_features['pfCand_E']+1]
+        xx_p4_shape = tf.shape(xx_p4)
+        xx_p4_other = xx[:,:,self.map_features['pfCand_pt']:self.map_features['pfCand_mass']+1]
+
+        d = tf.sqrt(tf.square(x[:, :, -2]) + tf.square(x[:, :, -1]))
+        w = tf.reshape(tf.math.exp(-10*d), (xx_p4_shape[0], xx_p4_shape[1], 1))
+
+        sum_p4 = tf.reduce_sum(xx_p4 * w, axis=1)
+        sum_p4_other = self.ToPtEtaPhiM2(sum_p4)
+
+        x = tf.concat([x, xx_p4, xx_p4_other], axis = 2)
+
+
+        #xx_p4 = tf.reshape(xx_p4, (xx_p4_shape[0], xx_p4_shape[1] * xx_p4_shape[2]))
         x_shape = tf.shape(x)
         x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
-        x = self.dense100(x)
-        x = self.dense100_2(x)
-        x = self.dense2(x)
+        x = tf.concat([x, sum_p4, sum_p4_other], axis = 1)
+        for i in range(len(self.dense_p4)):
+            #x = tf.concat([x, xx_p4], axis = 1)
+            x = self.dense_p4[i](x)
+        #x = tf.concat([x, sum_p4], axis = 1)
+        x_p4 = self.dense_p4_last(x)
+
+
+
+        x = x_last_gnn
+        x_shape = tf.shape(x)
+        x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
+        for i in range(len(self.dense_dm)):
+            x = self.dense_dm[i](x)
+        x_dm = self.dense_dm_last(x)
+        x_p4 = tf.zeros((x_shape[0], 4))
+        return tf.concat([x_dm, x_p4], axis=1)
 
         # print('x final: ', x.shape)# (n_tau, 3) ou  (50, 100, 6)
 
         # ### 4-momentum:
-        mypx  = x[:,2]
-        mypy  = x[:,3]
-        mypz  = x[:,4]
-        myE   = x[:,5]
+        # mypx  = x[:,2]
+        # mypy  = x[:,3]
+        # mypz  = x[:,4]
+        # myE   = x[:,5]
+        #
+        # mypx2  = tf.square(mypx)
+        # mypy2  = tf.square(mypy)
+        # mypz2  = tf.square(mypz)
+        # myE2   = tf.square(myE)
+        #
+        # mypt   = tf.sqrt(mypx2 + mypy2)
+        # mymass = myE2 - mypx2 - mypy2 - mypz2
+        # absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
+        #
+        # # ## for myeta and myphi:
+        # myphi = 0.0
+        # myeta = 0.0
+        #
+        # cosTheta = tf.where(absp==0, 1.0, mypz/absp)
+        # myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
+        # myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
+        #
+        # # # charged and neutral number of hadrons
+        # mycharged = x[:,0]
+        # myneurals = x[:,1]
+        #
+        # xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
+        #
+        # # xout = x
+        # return xout
+
+    def ToPtEtaPhiM2(self, x):
+        mypx  = x[:,0]
+        mypy  = x[:,1]
+        mypz  = x[:,2]
+        myE   = x[:,3]
 
         mypx2  = tf.square(mypx)
         mypy2  = tf.square(mypy)
@@ -338,22 +412,11 @@ class MyGNN(tf.keras.Model):
         mymass = myE2 - mypx2 - mypy2 - mypz2
         absp   = tf.sqrt(mypx2 + mypy2 + mypz2)
 
-        # ## for myeta and myphi:
-        myphi = 0.0
-        myeta = 0.0
-
         cosTheta = tf.where(absp==0, 1.0, mypz/absp)
         myeta = tf.where(cosTheta*cosTheta < 1, -0.5*tf.math.log((1.0-cosTheta)/(1.0+cosTheta)), 0.0)
         myphi = tf.where(tf.math.logical_and(mypx == 0, mypy == 0), 0.0, tf.math.atan2(mypy, mypx))
 
-        # # charged and neutral number of hadrons
-        mycharged = x[:,0]
-        myneurals = x[:,1]
-
-        xout = tf.stack([mycharged,myneurals,mypt,myeta,myphi,mymass], axis=1)
-
-        # xout = x
-        return xout
+        return tf.stack([mypt,myeta,myphi,mymass], axis=1)
 
 
 ### Function that creates generators:
@@ -383,7 +446,7 @@ def make_generator(file_name, entry_begin, entry_end, z = False):
             if cnt == 100:
                 gc.collect() # garbage collection to improve preformance
                 cnt = 0
-    
+
     return _generator, _n_batches
 
 #############################################################################################
@@ -401,32 +464,32 @@ def my_acc(y_true, y_pred):
 
 def my_mse_ch(y_true, y_pred):
     def_mse = 0.19904320783179388
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square(y_true[:,0] - y_pred[:,0])
 
 def my_mse_neu(y_true, y_pred):
     def_mse = np.array([0.4982084664239762])
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square(y_true[:,1] - y_pred[:,1])
 
 def my_mse_pt(y_true, y_pred):
     def_mse = 2.194362470631832
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square((y_true[:,2] - y_pred[:,2])/y_true[:,2])
 
 def my_mse_eta(y_true, y_pred):
     def_mse = 0.0007812506144594857
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square(y_true[:,3] - y_pred[:,3])
 
 def my_mse_phi(y_true, y_pred):
     def_mse = 0.047793857943109815
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square(y_true[:,4] - y_pred[:,4])
 
 def my_mse_mass(y_true, y_pred):
     def_mse = 0.5998682525160594
-    w = 1/(6*def_mse)
+    w = 1/def_mse
     return w*tf.square(y_true[:,5] - y_pred[:,5])
 
 
@@ -460,7 +523,7 @@ class MyResolution(tf.keras.metrics.Metric):
         self.sum_x.assign(0.)
         self.sum_x2.assign(0.)
         self.N.assign(0.)
-    
+
     def get_config(self):
         config = {
             "is_relative": self.is_relative,
@@ -512,22 +575,32 @@ def decay_mode_histo(x1, x2, dm_bins):
     h_dm = np.delete(h_dm,4,0)        # delete the 4. column
     return h_dm
 
+
+def DeltaPhi(x):
+    pi = tf.constant(math.pi)
+    two_pi = tf.constant(2 * math.pi)
+    x = tf.where(x > pi, x - two_pi, x)
+    return tf.where(x <= -pi, x + two_pi, x)
+
 ##### Custom loss function:
 class CustomMSE(keras.losses.Loss):
-    def __init__(self, name="custom_mse",**kwargs):
+    def __init__(self, mode="dm", name="custom_mse",**kwargs):
         super().__init__(name=name,**kwargs)
 
     def call(self, y_true, y_pred):
         def_mse = np.array([0.19904320783179388, 0.4982084664239762, 2.194362470631832,
                    0.0007812506144594857, 0.047793857943109815, 0.5998682525160594])
-        w = 1/(6*def_mse)
+        w = 1/def_mse
         mse1 = tf.square(y_true[:,0] - y_pred[:,0])
         mse2 = tf.square(y_true[:,1] - y_pred[:,1])
-        mse3 = tf.square((y_true[:,2] - y_pred[:,2])/y_true[:,2])
-        mse4 = tf.square(y_true[:,3] - y_pred[:,3])
-        mse5 = tf.square(y_true[:,4] - y_pred[:,4])
-        mse6 = tf.square(y_true[:,5] - y_pred[:,5])
-        return w[0]*mse1 + w[1]*mse2 + w[2]*mse3 + w[3]*mse4 + w[4]*mse5 + w[5]*mse6
+        #mse3 = tf.square((y_true[:,2] - y_pred[:,2])/y_true[:,2])
+        #mse4 = tf.square(y_true[:,3] - y_pred[:,3])
+        #mse5 = tf.square(DeltaPhi(y_true[:,4] - y_pred[:,4]))
+        #mse6 = tf.square(y_true[:,5] - y_pred[:,5])
+        #return w[0]*mse1 + w[1]*mse2 + w[2]*mse3 + w[3]*mse4 + w[4]*mse5 + w[5]*mse6
+        return w[0]*mse1 + w[1]*mse2
+        #return w[0]*mse1 + w[1]*mse2 + w[2]*mse3 + w[5]*mse6
+        #return w[2]*mse3 + w[5]*mse6
 
 
 class ValidationCallback(tf.keras.callbacks.Callback):
@@ -560,9 +633,9 @@ class ValidationCallback(tf.keras.callbacks.Callback):
                 cnt += 1
         # print('Validation finished.')
         ### Save the entire models:
-        self.model.save("/data/cedrine/ModelTest/my_model_{}".format(epoch+1),save_format='tf')
+        self.model.save("ModelTest/my_model_{}".format(epoch+1),save_format='tf')
         print('Model is saved.')
-         
+
 
 callbacks = [
     tf.keras.callbacks.EarlyStopping(
@@ -575,7 +648,7 @@ callbacks = [
         restore_best_weights = False,
     ),
     tf.keras.callbacks.CSVLogger(
-        filename  = '/data/cedrine/ModelTest/log0.csv',
+        filename  = 'ModelTest/log0.csv',
         separator = ',',
         append    = False,
     )

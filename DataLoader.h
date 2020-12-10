@@ -28,7 +28,7 @@ enum class Feature {
     pfCand_pdgId                = 5,
     pfCand_pvAssociationQuality = 6,
     pfCand_fromPV               = 7,
-    pfCand_puppiWeight          = 8, 
+    pfCand_puppiWeight          = 8,
     pfCand_puppiWeightNoLep     = 9,
     pfCand_lostInnerHits        = 10,
     pfCand_numberOfPixelHits    = 11,
@@ -54,9 +54,9 @@ enum class Feature {
 };
 
 string feature_names[31] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
-    "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
-    "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
-    "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
+    "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits",
+    "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz",
+    "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction",
     "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E",
     "pfCand_rel_eta","pfCand_rel_phi"};
 
@@ -67,7 +67,7 @@ struct DataLoader {
     //This is the constructor:
     DataLoader(std::string file_name, size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
         file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset){}
- 
+
     std::shared_ptr<TFile> file;
     tau_tuple::TauTuple tuple; // tuple is the tree
     size_t n_tau; // number of events(=taus)
@@ -96,16 +96,16 @@ struct DataLoader {
         return mapOfy;
     }
 
-    bool HasNext() {     
+    bool HasNext() {
         return (current_entry + n_tau) < end_dataset;
     }
     Data LoadNext(){
         Data data(n_tau * n_pf * n_fe, n_tau * n_label, n_tau*(n_label-1)); // Creates an empty data structure
-        
-        for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) { 
+
+        for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) {
             tuple.GetEntry(current_entry); // get the entry of the current event
             const tau_tuple::Tau& tau = tuple(); // tau is out tree
-            
+
             ///////////////////////////////////////////////////////////////////////
             // Filling data.z:
             auto get_z = [&](size_t label_ind) -> float& {
@@ -114,7 +114,7 @@ struct DataLoader {
             };
 
             const bool def_bool = (tau.tau_decayModeFindingNewDMs > 0 && tau.tau_index >= 0);
-            get_z(0) = def_bool ? tau.tau_decayMode : -1; 
+            get_z(0) = def_bool ? tau.tau_decayMode : -1;
             get_z(1) = def_bool ? tau.tau_pt   : 10000.0;
             get_z(2) = def_bool ? tau.tau_eta  : 10.0;
             get_z(3) = def_bool ? tau.tau_phi  : 10.0;
@@ -137,27 +137,27 @@ struct DataLoader {
             std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
                 return tau.pfCand_pt.at(a) > tau.pfCand_pt.at(b);
             });
-            
-            TLorentzVector gen_p4(0, 0, 0, 0); // 4-momentum vector
+
+
 
             size_t test = n_pf; // doesn't work without this line
             size_t max_pf = std::min(test,indices.size());
 
             for(size_t pf_ind = 0; pf_ind < max_pf; ++pf_ind) {
-                
+
                 auto get_x = [&](Feature fe) -> float& {
                     size_t index = GetIndex_x(tau_ind, pf_ind, fe);
                     return data.x.at(index);
                 };
-                
-                size_t pf_size = tau.pfCand_pt.size(); 
+
+                size_t pf_size = tau.pfCand_pt.size();
                 static constexpr float def_val = 0.f;
                 static constexpr float def_val_1 = 1.f;
                 size_t pf_ind_sorted = indices.at(pf_ind);
 
                 const bool has_trk_details = tau.pfCand_hasTrackDetails.at(pf_ind_sorted);
                 const bool dz_not_NaN = (std::isnormal(tau.pfCand_dz.at(pf_ind_sorted)) || tau.pfCand_dz.at(pf_ind_sorted) == 0);
-                
+
                 get_x(Feature::pfCand_pt)                   = tau.pfCand_pt.at(pf_ind_sorted);
                 get_x(Feature::pfCand_eta)                  = tau.pfCand_eta.at(pf_ind_sorted);
                 get_x(Feature::pfCand_phi)                  = tau.pfCand_phi.at(pf_ind_sorted);
@@ -179,7 +179,7 @@ struct DataLoader {
                 get_x(Feature::pfCand_rawCaloFraction)      = tau.pfCand_rawCaloFraction.at(pf_ind_sorted);
                 get_x(Feature::pfCand_rawHcalFraction)      = tau.pfCand_rawHcalFraction.at(pf_ind_sorted);
                 get_x(Feature::pfCand_valid)                = def_val_1;
-                
+
                 TLorentzVector v;
                 v.SetPtEtaPhiM(tau.pfCand_pt.at(pf_ind_sorted), tau.pfCand_eta.at(pf_ind_sorted),tau.pfCand_phi.at(pf_ind_sorted),tau.pfCand_mass.at(pf_ind_sorted));
                 get_x(Feature::pfCand_px)                   = v.Px();
@@ -191,22 +191,23 @@ struct DataLoader {
                 get_x(Feature::pfCand_dz_error)             = has_trk_details ? tau.pfCand_dz_error.at(pf_ind_sorted)      : def_val;
                 get_x(Feature::pfCand_track_chi2)           = has_trk_details ? tau.pfCand_track_chi2.at(pf_ind_sorted)    : def_val;
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
-                
+
                 get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
                 get_x(Feature::pfCand_rel_phi)             = TVector2::Phi_mpi_pi(tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi);
-                
-                //////////////////////////////////////////////////////////////////////
-                ////// 4-momentum part:
-                if(pf_ind < tau.lepton_gen_vis_pt.size()){
-                    TLorentzVector v1;
-                    v1.SetPtEtaPhiM(tau.lepton_gen_vis_pt.at(pf_ind) , tau.lepton_gen_vis_eta.at(pf_ind),
-                                    tau.lepton_gen_vis_phi.at(pf_ind),tau.lepton_gen_vis_mass.at(pf_ind));
-                    gen_p4 += v1;
-                }
+
             }
             if(current_entry == end_dataset){
                 tau_ind = n_tau;
             }
+
+            TLorentzVector gen_p4(0, 0, 0, 0); // 4-momentum vector
+            for(size_t gen_ind = 0; gen_ind < tau.lepton_gen_vis_pt.size(); ++gen_ind) {
+                TLorentzVector v1;
+                v1.SetPtEtaPhiM(tau.lepton_gen_vis_pt.at(gen_ind) , tau.lepton_gen_vis_eta.at(gen_ind),
+                                tau.lepton_gen_vis_phi.at(gen_ind),tau.lepton_gen_vis_mass.at(gen_ind));
+                gen_p4 += v1;
+            }
+
             get_y(2) = gen_p4.Pt();
             get_y(3) = gen_p4.Eta();
             get_y(4) = gen_p4.Phi();
@@ -224,10 +225,10 @@ struct DataLoader {
 
     // Resets the current entry to start_dataset so that we can loop on epochs:
     void Reset() {
-        current_entry = start_dataset; 
+        current_entry = start_dataset;
     }
 
-    // This function calculates the corresponding index in a 1D array: 
+    // This function calculates the corresponding index in a 1D array:
     // feed a = b.reshape(n_tau,n_pf,n_fe)
     size_t GetIndex_x(size_t _tau_ind, size_t _pf_ind, Feature _fe) const {
         size_t _fe_ind = static_cast<size_t>(_fe);
@@ -237,7 +238,7 @@ struct DataLoader {
         return part_fe_direction + part_pf_direction + part_tau_direction;
     }
 
-    // This function calculates the corresponding index in a 1D array: 
+    // This function calculates the corresponding index in a 1D array:
     // feed a = b.reshape(n_tau,n_label)
     size_t GetIndex_y(size_t _tau_ind, size_t _label_ind) const {
         size_t part_label_direction = _label_ind;
