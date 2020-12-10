@@ -1,5 +1,11 @@
 import tensorflow as tf
 
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("saved_filename", help="filename where the model was saved")
+parser.add_argument("--mode", help="mode can be dm or p4 the default is dm")
+args = parser.parse_args()
+
 ######## Memory allocation:
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpus[0], True) # dynamic memory allocation
@@ -29,14 +35,15 @@ from evaluation import evaluation
 print('\n#######################################################\
       \n            Evaluation start !!!                  \n\
 #######################################################')
-
-_mode = "dm"
-# _mode = "p4"
-_filename = "/data/cedrine/ModelTest2/test_" # + "mymodel_{}".format(epoch_number)
+if args.mode:
+      _mode = args.mode
+else:
+      _mode = "dm"
+_filename = args.saved_filename#"/data/cedrine/ModelTest2/test_" # + "mymodel_{}".format(epoch_number)
 _epoch_number = 2
 
 
-
+CustomMSE.mode = _mode
 conf_dm_mat, conf_dm_mat_old = evaluation(mode = _mode, filename = _filename, epoch_number= _epoch_number) # creates the confusion matrices
 
 print('\nEvaluation is finished.\n')

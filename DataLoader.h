@@ -158,6 +158,7 @@ struct DataLoader {
 
                 const bool has_trk_details = tau.pfCand_hasTrackDetails.at(pf_ind_sorted);
                 const bool dz_not_NaN = (std::isnormal(tau.pfCand_dz.at(pf_ind_sorted)) || tau.pfCand_dz.at(pf_ind_sorted) == 0);
+                const bool jet_valid = tau.jet_index >= 0;
                 
                 get_x(Feature::pfCand_pt)                   = tau.pfCand_pt.at(pf_ind_sorted);
                 get_x(Feature::pfCand_eta)                  = tau.pfCand_eta.at(pf_ind_sorted);
@@ -193,11 +194,11 @@ struct DataLoader {
                 get_x(Feature::pfCand_track_chi2)           = has_trk_details ? tau.pfCand_track_chi2.at(pf_ind_sorted)    : def_val;
                 get_x(Feature::pfCand_track_ndof)           = has_trk_details ? tau.pfCand_track_ndof.at(pf_ind_sorted)    : def_val;
 
-                get_x(Feature::jet_eta)                     = tau.jet_eta;
-                get_x(Feature::jet_phi)                     = tau.jet_phi;
+                get_x(Feature::jet_eta)                     = jet_valid ? tau.jet_eta : def_val;
+                get_x(Feature::jet_phi)                     = jet_valid ? tau.jet_phi : def_val;
                 
-                get_x(Feature::pfCand_rel_eta)             = tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta;
-                get_x(Feature::pfCand_rel_phi)             = TVector2::Phi_mpi_pi(tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi);
+                get_x(Feature::pfCand_rel_eta)             = jet_valid ? tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta : def_val;
+                get_x(Feature::pfCand_rel_phi)             = jet_valid ? TVector2::Phi_mpi_pi(tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) : def_val;
             }
             ////// 4-momentum part:
             TLorentzVector gen_p4(0, 0, 0, 0); // 4-momentum vector

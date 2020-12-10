@@ -12,11 +12,11 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 33   # total muber of features: 24
 n_labels = 4#6    # number of labels per event
-n_epoch  = 2 #100  # number of epochs on which to train
-n_steps_val   = 10 #14213
-n_steps_test  = 10000 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_epoch  = 10 #100  # number of epochs on which to train
+n_steps_val   = 1000 #14213
+n_steps_test  = 10 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-n_batch_training = 10
+n_batch_training = 1000
 entry_stop    = n_batch_training*100 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
@@ -110,7 +110,7 @@ class MyModel(tf.keras.Model):
         self.valid_index = map_features["pfCand_valid"]
         self.map_features = map_features
 
-        self.embedding1   = tf.keras.layers.Embedding(350,2)
+        self.embedding1   = tf.keras.layers.Embedding(350,3)
         self.embedding2   = tf.keras.layers.Embedding(4  ,2)
         self.embedding3   = tf.keras.layers.Embedding(8  ,2)
         self.normalize    = StdLayer('mean_std.txt', map_features, 5, name='std_layer')
@@ -254,28 +254,27 @@ class MyGNNLayer(tf.keras.layers.Layer):
         return output
 
 
-
 class MyGNN(tf.keras.Model):
 
-    def __init__(self, mode, map_features, filename, parameters, **kwargs):
-        super(MyGNN, self).__init__(**kwargs)
+    def __init__(self, mode, map_features, filename, **kwargs):
+        super(MyGNN, self).__init__()
         self.map_features = map_features
         self.mode = mode
         self.filename = filename
-        # parameters = [n_gnn_layers,n_dim_gnn, n_output_gnn, n_output_gnn_last, n_dense_layers, n_dense_nodes, wiring_mode]
-        self.n_gnn_layers      = parameters[0]
-        self.n_dim_gnn         = parameters[1]
-        self.n_output_gnn      = parameters[2]
-        self.n_output_gnn_last = parameters[3]
-        self.n_dense_layers    = parameters[4]
-        self.n_dense_nodes     = parameters[5]
-        self.wiring_mode       = parameters[6]
+        
+        self.n_gnn_layers      = kwargs["n_gnn_layers"]
+        self.n_dim_gnn         = kwargs["n_dim_gnn"]
+        self.n_output_gnn      = kwargs["n_output_gnn"]
+        self.n_output_gnn_last = kwargs["n_output_gnn_last"]
+        self.n_dense_layers    = kwargs["n_dense_layers"]
+        self.n_dense_nodes     = kwargs["n_dense_nodes"]
+        self.wiring_mode       = kwargs["wiring_mode"]
 
         self.embedding1   = tf.keras.layers.Embedding(350,2)
         self.embedding2   = tf.keras.layers.Embedding(4  ,2)
         self.embedding3   = tf.keras.layers.Embedding(8  ,2)
-        self.normalize    = StdLayer('mean_std.txt', map_features, 5, name='std_layer')
-        self.scale        = ScaleLayer('min_max.txt', map_features, [-1,1], name='scale_layer')
+        self.normalize    = StdLayer('mean_std.txt', self.map_features, 5, name='std_layer')
+        self.scale        = ScaleLayer('min_max.txt', self.map_features, [-1,1], name='scale_layer')
 
         self.GNN_layers = []
         self.batch_norm = []
@@ -288,16 +287,14 @@ class MyGNN(tf.keras.Model):
         self.n_dense_layers = self.n_dense_layers
 
         if(mode=="dm"): 
-            acti = "tanh"
             acti_den = "sigmoid"
         else:
-            acti = "relu"
             acti_den = "relu"
 
         for i in range(self.n_gnn_layers):
             self.GNN_layers.append(MyGNNLayer(n_dim=list_n_dim[i], num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
-            self.batch_norm.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
-            self.acti_gnn.append(tf.keras.layers.Activation(acti, name='acti_gnn_{}'.format(i)))
+            # self.batch_norm.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
+            self.acti_gnn.append(tf.keras.layers.Activation("tanh", name='acti_gnn_{}'.format(i)))
         
         for i in range(self.n_dense_layers-1):
             self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, activation = acti_den, kernel_initializer="he_uniform", 
@@ -309,6 +306,7 @@ class MyGNN(tf.keras.Model):
 
     @tf.function
     def call(self, xx):
+        
         x_mask = xx[:,:,self.map_features['pfCand_valid']]
 
         x_em1 = self.embedding1(tf.abs(xx[:,:,self.map_features['pfCand_pdgId']]))
@@ -328,12 +326,12 @@ class MyGNN(tf.keras.Model):
                 x = self.GNN_layers[i](x, mask=x_mask)
                 if i == 0: 
                     x0 = x
-                x = self.batch_norm[i](x)
+                # x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
         elif(self.wiring_mode=="m1"):
             for i in range(self.n_gnn_layers):
                 x = self.GNN_layers[i](x, mask=x_mask)
-                x = self.batch_norm[i](x)
+                # x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
         elif(self.wiring_mode=="m3"):
             for i in range(self.n_gnn_layers):
@@ -342,9 +340,8 @@ class MyGNN(tf.keras.Model):
                 x = self.GNN_layers[i](x, mask=x_mask)
                 if(i%3==0): 
                     x0 = x
-                x = self.batch_norm[i](x)
+                # x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
-        
 
 
         if(self.mode == "p4"):
@@ -354,10 +351,12 @@ class MyGNN(tf.keras.Model):
             
             x_coor = x[:,:, -self.n_dim_gnn:]
             x_coor = tf.math.square(x_coor)
-            d = tf.sqrt(tf.square(tf.math.reduce_sum(scx, axis = -1)))
+            d = tf.square(tf.math.reduce_sum(x_coor, axis = -1))
             w = tf.reshape(tf.math.exp(-10*d), (xx_p4_shape[0], xx_p4_shape[1], 1))
-
-            sum_p4 = tf.reduce_sum(xx_p4 * w, axis=1)
+            
+            x_mask_shape = tf.shape(x_mask)
+            x_mask = tf.reshape(x_mask, (x_mask_shape[0], x_mask_shape[1], 1))
+            sum_p4 = tf.reduce_sum(xx_p4 * w * x_mask, axis=1)
             # print('sum_p4.shape: ', sum_p4.shape) #(100,4)
             sum_p4_other = self.ToPtM2(sum_p4)
 
@@ -506,13 +505,19 @@ class MyResolution(tf.keras.metrics.Metric):
         raise RuntimeError("Im here")
         return MyResolution(config["name"], config["var_pos"], is_relative=config["is_relative"])
 
-pt_res_obj  = MyResolution('pt_res' , 2 ,False)
-m2_res_obj  = MyResolution('m^2_res', 3 ,False)
+pt_res_obj_rel = MyResolution('pt_res' , 2 ,True)
+pt_res_obj     = MyResolution('pt_res' , 2 ,False)
+m2_res_obj     = MyResolution('m^2_res', 3 ,False)
 
 def pt_res(y_true, y_pred, sample_weight=None):
     global pt_res_obj
     pt_res_obj.update_state(y_true, y_pred)
     return pt_res_obj.result()
+
+def pt_res_rel(y_true, y_pred, sample_weight=None):
+    global pt_res_obj_rel
+    pt_res_obj_rel.update_state(y_true, y_pred)
+    return pt_res_obj_rel.result()
 
 def m2_res(y_true, y_pred, sample_weight=None):
     global m2_res_obj
@@ -532,18 +537,19 @@ def decay_mode_histo(x1, x2, dm_bins):
 
 ##### Custom loss function:
 class CustomMSE(keras.losses.Loss):
-    def __init__(self, mode, name="custom_mse",**kwargs):
+    mode = None
+
+    def __init__(self, name="custom_mse", **kwargs):
         super().__init__(name=name,**kwargs)
-        self.mode = mode
 
     def call(self, y_true, y_pred):
-        if(self.mode == "dm"):
+        if(CustomMSE.mode == "dm"):
             def_mse = np.array([0.19904320783179388, 0.4982084664239762])
             w = 1/def_mse
             mse1 = tf.square(y_true[:,0] - y_pred[:,0])
             mse2 = tf.square(y_true[:,1] - y_pred[:,1])
             return w[0]*mse1 + w[1]*mse2
-        elif(self.mode=="p4"):
+        elif(CustomMSE.mode=="p4"):
             def_mse = np.array([37.541533469830576, 0.5998682525160594])
             w = 1/def_mse
             mse3 = tf.square(y_true[:,2] - y_pred[:,2])
