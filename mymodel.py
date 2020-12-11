@@ -14,7 +14,7 @@ n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 33   # total muber of features: 24
 n_labels = 4#6    # number of labels per event
 n_epoch  = 100 #100  # number of epochs on which to train
-n_steps_val   = 100 #14213
+n_steps_val   = 1000 #14213
 n_steps_test  = 10 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
 n_batch_training = 2000
