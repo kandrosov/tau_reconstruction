@@ -1,6 +1,7 @@
 import ROOT as R
 import numpy as np
 import tensorflow as tf
+import os
 
 from mymodel import *
 
@@ -34,8 +35,8 @@ def training(mode, filename, parameters):
     model.summary()
     print('\nModel is fit:\n')
 
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=5)
-    csv_logger = tf.keras.callbacks.CSVLogger(filename+"log0.csv", append=False, separator=',')
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=3)
+    csv_logger = tf.keras.callbacks.CSVLogger(os.path.join(filename,"log0.csv"), append=False, separator=',')
 
     history = model.fit(x = tf.data.Dataset.from_generator(generator,(tf.float32, tf.float32),
                         (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,4]))),

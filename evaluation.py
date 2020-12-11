@@ -3,6 +3,7 @@ import ROOT as R
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
+import os
 
 from mymodel import *
 from plotting import plot_res
@@ -15,6 +16,7 @@ def make_sqrt(m):
     return m
 
 def evaluation(mode, filename, epoch_number):
+    filename_plots = os.path.join(filename, "Plots_"+str(epoch_number))
     print('\nStart evaluation, load model and generator:\n')
     ##### Load the model:
     if(mode== "dm"):
@@ -33,7 +35,7 @@ def evaluation(mode, filename, epoch_number):
             "my_mse_mass" : my_mse_mass,
         }
 
-    model = tf.keras.models.load_model(filename +"my_model_{}".format(epoch_number), custom_objects=custom_objects, compile=True)
+    model = tf.keras.models.load_model(os.path.join(filename,"my_model_{}".format(epoch_number)), custom_objects=custom_objects, compile=True)
     print("Model loaded.")
 
     generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)
@@ -76,10 +78,10 @@ def evaluation(mode, filename, epoch_number):
         c2 = R.TCanvas( 'c4', '', 200, 10, 700, 500)
         legend2 = plot_res(h_m2_tot, def_h_m2_tot, "Absolute difference for mass [GeV]")
         legend2.Draw("SAMES")
-        c1.SaveAs(filename+'h_p4_resolution.pdf[')
-        c1.SaveAs(filename+'h_p4_resolution.pdf')
-        c2.SaveAs(filename+'h_p4_resolution.pdf')
-        c2.SaveAs(filename+'h_p4_resolution.pdf]')
+        c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf['))
+        c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf]'))
 
 
     elif(mode=="dm"):

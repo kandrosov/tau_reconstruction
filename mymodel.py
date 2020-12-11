@@ -5,6 +5,7 @@ from tensorflow import keras
 import json
 from ROOT import TLorentzVector
 import math
+import os
 
 
 ### All the parameters:
@@ -12,11 +13,11 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 33   # total muber of features: 24
 n_labels = 4#6    # number of labels per event
-n_epoch  = 10 #100  # number of epochs on which to train
-n_steps_val   = 1000 #14213
+n_epoch  = 100 #100  # number of epochs on which to train
+n_steps_val   = 100 #14213
 n_steps_test  = 10 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-n_batch_training = 1000
+n_batch_training = 2000
 entry_stop    = n_batch_training*100 #6396973 # total number of events in the dataset = 14'215'297
 # 45% = 6'396'973
 # 10% = 1'421'351 (approximative calculations have been rounded)
@@ -589,6 +590,6 @@ class ValidationCallback(tf.keras.callbacks.Callback):
                 cnt += 1
     
         ### Save the entire models:
-        self.model.save(self.model.filename+"my_model_{}".format(epoch+1),save_format='tf')
+        self.model.save(os.path.join(self.model.filename,"my_model_{}".format(epoch+1)),save_format='tf')
         print('Model is saved.')
          

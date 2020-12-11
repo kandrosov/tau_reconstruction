@@ -1,10 +1,13 @@
 import tensorflow as tf
+import json
 
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("output_filename", help="filename where to save the output")
 parser.add_argument("--mode", help="mode can be dm or p4 the default is dm")
+parser.add_argument("--params", help="model parameters")
 args = parser.parse_args()
+parameters = json.loads(args.params)
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 # tf.config.experimental.set_memory_growth(gpus[0], True) # dynamic memory allocation
@@ -56,20 +59,21 @@ except OSError:
 else:
     print ("Successfully created the directory %s " % _filename)
 
-parameters = {
-      "n_gnn_layers": 10,
-      "n_dim_gnn": 2,
-      "n_output_gnn": 100,
-      "n_output_gnn_last": 15,
-      "n_dense_layers": 4,
-      "n_dense_nodes": 100,
-      "wiring_mode": "m2",
-}
+# parameters = {
+#       "n_gnn_layers": 10,
+#       "n_dim_gnn": 2,
+#       "n_output_gnn": 100,
+#       "n_output_gnn_last": 10,
+#       "n_dense_layers": 4,
+#       "n_dense_nodes": 100,
+#       "wiring_mode": "m1",
+# }
+# parameters = args.params
 
 history = training(mode = _mode, filename = _filename, parameters=parameters) # trains the model
 # history = training(mode = "p4")
 
-plot_metrics(history, mode = _mode) # Plots the loss and accuracy curves for trainset and validationset
+plot_metrics(history, mode = _mode, filename = _filename) # Plots the loss and accuracy curves for trainset and validationset
 # plot_metrics(history, mode = "p4") 
 
 print('#######################################################\

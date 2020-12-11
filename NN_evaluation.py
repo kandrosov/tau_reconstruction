@@ -1,9 +1,11 @@
 import tensorflow as tf
+import os
 
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("saved_filename", help="filename where the model was saved and where the figures will be saved. Example: '/data/results/run1/' ")
 parser.add_argument("--mode", help="mode can be 'dm' or 'p4'. The default is 'dm'")
+parser.add_argument("--epoch_number", help="the epoch to evaluate. Default is 1.")
 args = parser.parse_args()
 
 ######## Memory allocation:
@@ -35,29 +37,43 @@ from evaluation import evaluation
 print('\n#######################################################\
       \n            Evaluation start !!!                  \n\
 #######################################################')
+
+_filename = args.saved_filename #"/data/results/run1/" # + "mymodel_{}".format(epoch_number)
+
 if args.mode:
       _mode = args.mode
 else:
       _mode = "dm"
-_filename = args.saved_filename #"/data/results/run1/" # + "mymodel_{}".format(epoch_number)
-_epoch_number = 2
+
+if args.epoch_number:
+      _epoch_number = args.epoch_number
+else:
+      _epoch_number = 1
+
+_filename_plots = os.path.join(_filename, "Plots_"+str(_epoch_number))
+try:
+    os.mkdir(_filename_plots)
+except OSError:
+    print ("Creation of the directory %s failed, because already existing" % _filename)
+else:
+    print ("Successfully created the directory %s " % _filename)
 
 # The number over which it is evaluated is decided in mymodel.py: n_steps_test is the number of batches in the test.
 
 CustomMSE.mode = _mode
 
-if(mode=="dm"):
+if(_mode=="dm"):
       conf_dm_mat, conf_dm_mat_old = evaluation(mode = _mode, filename = _filename, epoch_number= _epoch_number) #creates the confusion matrices
 
-      plt_conf_dm(conf_dm_mat, filename = _filename)  # Plots the configuration matrix of decay modes (truth vs. predicted)
-      plt_conf_dm(conf_dm_mat_old, filename = _filename, old = True) # Plots the confusion matrix to compare predicted decay modes to old reconstruction method
+      plt_conf_dm(conf_dm_mat, filename_plots = _filename_plots)  # Plots the configuration matrix of decay modes (truth vs. predicted)
+      plt_conf_dm(conf_dm_mat_old, filename_plots = _filename_plots, old = True) # Plots the confusion matrix to compare predicted decay modes to old reconstruction method
 
       print('\nConfusion matrices finished.')
 
-      accuracy = accuracy_calc(conf_dm_mat, filename = _filename) # Accuracy calculation of main decay modes (truth vs. predicted)
-      accuracy = accuracy_calc(conf_dm_mat_old, filename = _filename, old = True)
+      accuracy = accuracy_calc(conf_dm_mat, filename_plots = _filename_plots) # Accuracy calculation of main decay modes (truth vs. predicted)
+      accuracy = accuracy_calc(conf_dm_mat_old, filename_plots = _filename_plots, old = True)
 
-elif(mode=="p4"):
+elif(_mode=="p4"):
       evaluation(mode = _mode, filename = _filename, epoch_number= _epoch_number) #creates the resolution plots
 
 print('#######################################################\

@@ -1,16 +1,17 @@
 import pandas as pd
 import matplotlib as mpl
-# mpl.use('Agg')
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
 import numpy as np
 import ROOT as R
+import os
 
 from mymodel import *
 
 ### Plots the loss and accuracy for the trainset and the validationset:
-def plot_metrics(history, mode):
+def plot_metrics(history, mode, filename_plots):
     epochs = history.epoch
     hist   = pd.DataFrame(history.history)
     # print('\nPrint history: ',history.history)
@@ -44,8 +45,8 @@ def plot_metrics(history, mode):
         axes[0].legend()
     
 
-        # pdf0 = pp.PdfPages("/data/cedrine/ModelTest/Metrics.pdf")
-        pdf0 = pp.PdfPages("../Plots/Metrics_p4.pdf")
+        # pdf0 = pp.PdfPages("data/cedrine/ModelTest/Metrics.pdf")
+        pdf0 = pp.PdfPages(os.path.join(filename_plots,"Metrics_p4.pdf"))
         pdf0.savefig(fig0)
         pdf0.savefig(fig1)
         pdf0.close()
@@ -85,7 +86,7 @@ def plot_metrics(history, mode):
 
 
 ### Plots the confusion matrix of decay modes:
-def plt_conf_dm(conf_dm_mat, filename, old = False):
+def plt_conf_dm(conf_dm_mat, filename_plots, old = False):
     x_axis_labels = ['$\pi^{\pm}$','$\pi^{\pm} + \pi^0$', '$\pi^{\pm} + 2\pi^0$', \
                  '$\pi^{\pm} + 3\pi^0$','$3\pi^{\pm}$', '$3\pi^{\pm} + 1\pi^0$',\
                  '$3\pi^{\pm} + 2\pi^0$', 'others'] # labels for x-axis
@@ -102,9 +103,9 @@ def plt_conf_dm(conf_dm_mat, filename, old = False):
         plt.xlabel('Default tau reconstruction',fontsize = 16)
     plt.tight_layout()
     if old == False:
-        plt.savefig(filename+"conf_dm_mat_predicted.pdf")
+        plt.savefig(os.path.join(filename_plots,"conf_dm_mat_predicted.pdf"))
     else: 
-        plt.savefig(filename+"conf_dm_mat_default.pdf")
+        plt.savefig(os.path.join(filename_plots,"conf_dm_mat_default.pdf"))
 
     # ### check the true distribution of the decay modes:
     # tot_dm = conf_dm_mat.sum(axis=1)
@@ -112,7 +113,7 @@ def plt_conf_dm(conf_dm_mat, filename, old = False):
     # tot_dm_norm = tot_dm/tot_dm.sum()
     # print('Probabilities of decay mode for true: \n',tot_dm_norm,'\n')
 
-def accuracy_calc(conf_dm_mat, filename, old = False):
+def accuracy_calc(conf_dm_mat, filename_plots, old = False):
     ## Normalization of cond_dm_mat:
     conf_dm_mat_norm = conf_dm_mat
     for i in range(0,len(conf_dm_mat[0,:])):
@@ -139,9 +140,9 @@ def accuracy_calc(conf_dm_mat, filename, old = False):
     plt.tight_layout()
     # plt.show()
     if(old==False):
-        pdf = pp.PdfPages(filename+"conf_dm_mat_norm_predicted.pdf")
+        pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_predicted.pdf"))
     else:
-        pdf = pp.PdfPages(filename+"conf_dm_mat_norm_default.pdf")
+        pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_default.pdf"))
     pdf.savefig(fig)
     pdf.close()
     plt.close()
