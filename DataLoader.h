@@ -14,7 +14,7 @@ std::shared_ptr<TFile> OpenRootFile(const std::string& file_name){
 
 
 struct Data {
-    Data(size_t nx, size_t ny, size_t nz) : x(nx, 0), y(ny, 0), z(nz, 0){ }
+    Data(size_t nx, size_t ny, size_t nz) : x(nx, 0), y(ny, 0), z(nz, 0) { }
     std::vector<float> x, y, z;
 };
 
@@ -28,7 +28,7 @@ enum class Feature {
     pfCand_pdgId                = 5,
     pfCand_pvAssociationQuality = 6,
     pfCand_fromPV               = 7,
-    pfCand_puppiWeight          = 8, 
+    pfCand_puppiWeight          = 8,
     pfCand_puppiWeightNoLep     = 9,
     pfCand_lostInnerHits        = 10,
     pfCand_numberOfPixelHits    = 11,
@@ -56,9 +56,9 @@ enum class Feature {
 };
 
 string feature_names[33] = {"pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_charge", "pfCand_pdgId",
-    "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
-    "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz", 
-    "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction", 
+    "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits",
+    "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy", "pfCand_dxy_error", "pfCand_dz",
+    "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "pfCand_caloFraction", "pfCand_hcalFraction",
     "pfCand_rawCaloFraction", "pfCand_rawHcalFraction","pfCand_valid","pfCand_px","pfCand_py","pfCand_pz","pfCand_E","jet_eta","jet_phi",
     "pfCand_rel_eta","pfCand_rel_phi"};
 
@@ -67,12 +67,18 @@ string y_label_names[4] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt
 
 struct DataLoader {
 
+    static bool enableMT;
+
     //This is the constructor:
-    DataLoader(std::string file_name, size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
-        file(OpenRootFile(file_name)), tuple(file.get(), true), n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset){}
- 
+    DataLoader(std::string _file_name, size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
+        file_name(_file_name), n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset)
+    {
+        Reset();
+    }
+
+    std::string file_name;
     std::shared_ptr<TFile> file;
-    tau_tuple::TauTuple tuple; // tuple is the tree
+    std::shared_ptr<tau_tuple::TauTuple> tuple; // tuple is the tree
     size_t n_tau; // number of events(=taus)
     Long64_t start_dataset;
     Long64_t end_dataset;
@@ -83,7 +89,7 @@ struct DataLoader {
     static const size_t n_label = 4;//6;   // chanrged and neutral particle label
 
     // Creation of map of features:
-    std::map<std::string, int> MapCreation(){
+    static std::map<std::string, int> MapCreation(){
         std::map<std::string, int> mapOfFeatures;
         for(size_t i = 0; i <= 32; ++i){
             mapOfFeatures[feature_names[i]] = i;
@@ -91,7 +97,7 @@ struct DataLoader {
         return mapOfFeatures;
     }
 
-    std::map<std::string, int> MapCreationy(){
+    static std::map<std::string, int> MapCreationy(){
         std::map<std::string, int> mapOfy;
         for(size_t i = 0; i <= 3; ++i){
             mapOfy[y_label_names[i]] = i;
@@ -99,25 +105,27 @@ struct DataLoader {
         return mapOfy;
     }
 
-    bool HasNext() {     
+    bool HasNext() {
         return (current_entry + n_tau) < end_dataset;
     }
-    Data LoadNext(){
-        Data data(n_tau * n_pf * n_fe, n_tau * n_label, n_tau*(n_label-1)); // Creates an empty data structure
-        
-        for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) { 
-            tuple.GetEntry(current_entry); // get the entry of the current event
-            const tau_tuple::Tau& tau = tuple(); // tau is out tree
-            
+    std::shared_ptr<Data> LoadNext(){
+        auto data = std::make_shared<Data>(n_tau * n_pf * n_fe, n_tau * n_label, n_tau*(n_label-1)); // Creates an empty data structure
+        if(!tuple)
+            throw std::runtime_error("Tuple is not set");
+
+        for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) {
+            tuple->GetEntry(current_entry); // get the entry of the current event
+            const tau_tuple::Tau& tau = (*tuple)(); // tau is out tree
+
             ///////////////////////////////////////////////////////////////////////
             // Filling data.z:
             auto get_z = [&](size_t label_ind) -> float& {
                 size_t index = GetIndex_z(tau_ind, label_ind);
-                return data.z.at(index);
+                return data->z.at(index);
             };
 
             const bool def_bool = (tau.tau_decayModeFindingNewDMs > 0 && tau.tau_index >= 0);
-            get_z(0) = def_bool ? tau.tau_decayMode : -1; 
+            get_z(0) = def_bool ? tau.tau_decayMode : -1;
             get_z(1) = def_bool ? tau.tau_pt   : 10000.0;
             // get_z(2) = def_bool ? tau.tau_eta  : 10.0;
             // get_z(3) = def_bool ? tau.tau_phi  : 10.0;
@@ -127,7 +135,7 @@ struct DataLoader {
             // Fill the labels:
             auto get_y = [&](size_t label_ind) -> float& {
                 size_t index = GetIndex_y(tau_ind, label_ind);
-                return data.y.at(index);
+                return data->y.at(index);
             };
             get_y(0) = Count_charged_hadrons_true(tau.lepton_gen_vis_pdg);
             get_y(1) = Count_neutral_hadrons_true(tau.lepton_gen_vis_pdg);
@@ -145,13 +153,13 @@ struct DataLoader {
             size_t max_pf = std::min(test,indices.size());
 
             for(size_t pf_ind = 0; pf_ind < max_pf; ++pf_ind) {
-                
+
                 auto get_x = [&](Feature fe) -> float& {
                     size_t index = GetIndex_x(tau_ind, pf_ind, fe);
-                    return data.x.at(index);
+                    return data->x.at(index);
                 };
-                
-                size_t pf_size = tau.pfCand_pt.size(); 
+
+                size_t pf_size = tau.pfCand_pt.size();
                 static constexpr float def_val = 0.f;
                 static constexpr float def_val_1 = 1.f;
                 size_t pf_ind_sorted = indices.at(pf_ind);
@@ -159,7 +167,7 @@ struct DataLoader {
                 const bool has_trk_details = tau.pfCand_hasTrackDetails.at(pf_ind_sorted);
                 const bool dz_not_NaN = (std::isnormal(tau.pfCand_dz.at(pf_ind_sorted)) || tau.pfCand_dz.at(pf_ind_sorted) == 0);
                 const bool jet_valid = tau.jet_index >= 0;
-                
+
                 get_x(Feature::pfCand_pt)                   = tau.pfCand_pt.at(pf_ind_sorted);
                 get_x(Feature::pfCand_eta)                  = tau.pfCand_eta.at(pf_ind_sorted);
                 get_x(Feature::pfCand_phi)                  = tau.pfCand_phi.at(pf_ind_sorted);
@@ -181,7 +189,7 @@ struct DataLoader {
                 get_x(Feature::pfCand_rawCaloFraction)      = tau.pfCand_rawCaloFraction.at(pf_ind_sorted);
                 get_x(Feature::pfCand_rawHcalFraction)      = tau.pfCand_rawHcalFraction.at(pf_ind_sorted);
                 get_x(Feature::pfCand_valid)                = def_val_1;
-                
+
                 TLorentzVector v;
                 v.SetPtEtaPhiM(tau.pfCand_pt.at(pf_ind_sorted), tau.pfCand_eta.at(pf_ind_sorted),tau.pfCand_phi.at(pf_ind_sorted),tau.pfCand_mass.at(pf_ind_sorted));
                 get_x(Feature::pfCand_px)                   = v.Px();
@@ -196,7 +204,7 @@ struct DataLoader {
 
                 get_x(Feature::jet_eta)                     = jet_valid ? tau.jet_eta : def_val;
                 get_x(Feature::jet_phi)                     = jet_valid ? tau.jet_phi : def_val;
-                
+
                 get_x(Feature::pfCand_rel_eta)             = jet_valid ? tau.pfCand_eta.at(pf_ind_sorted) - tau.jet_eta : def_val;
                 get_x(Feature::pfCand_rel_phi)             = jet_valid ? TVector2::Phi_mpi_pi(tau.pfCand_phi.at(pf_ind_sorted) - tau.jet_phi) : def_val;
             }
@@ -228,10 +236,18 @@ struct DataLoader {
 
     // Resets the current entry to start_dataset so that we can loop on epochs:
     void Reset() {
-        current_entry = start_dataset; 
+        current_entry = start_dataset;
+        if(tuple)
+            tuple.reset();
+        if(file) {
+            file->Close();
+            file.reset();
+        }
+        file = OpenRootFile(file_name);
+        tuple = std::make_shared<tau_tuple::TauTuple>(file.get(), true);
     }
 
-    // This function calculates the corresponding index in a 1D array: 
+    // This function calculates the corresponding index in a 1D array:
     // feed a = b.reshape(n_tau,n_pf,n_fe)
     size_t GetIndex_x(size_t _tau_ind, size_t _pf_ind, Feature _fe) const {
         size_t _fe_ind = static_cast<size_t>(_fe);
@@ -241,7 +257,7 @@ struct DataLoader {
         return part_fe_direction + part_pf_direction + part_tau_direction;
     }
 
-    // This function calculates the corresponding index in a 1D array: 
+    // This function calculates the corresponding index in a 1D array:
     // feed a = b.reshape(n_tau,n_label)
     size_t GetIndex_y(size_t _tau_ind, size_t _label_ind) const {
         size_t part_label_direction = _label_ind;
@@ -288,3 +304,11 @@ struct DataLoader {
     }
 
 };
+
+bool EnableMT()
+{
+    ROOT::EnableImplicitMT(4);
+    return true;
+}
+
+bool DataLoader::enableMT = EnableMT();

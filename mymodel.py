@@ -295,10 +295,10 @@ class MyGNN(tf.keras.Model):
         self.n_gnn_layers = len(list_outputs)
         self.n_dense_layers = self.n_dense_layers
 
-        if(mode=="dm"):
-            acti_den = "sigmoid"
-        else:
-            acti_den = "relu"
+        #if(mode=="dm"):
+        acti_den = "sigmoid"
+        #else:
+        #    acti_den = "relu"
 
         for i in range(self.n_gnn_layers):
             self.GNN_layers.append(MyGNNLayer(n_dim=list_n_dim[i], num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
@@ -310,7 +310,9 @@ class MyGNN(tf.keras.Model):
                                 bias_initializer="he_uniform", name='dense_{}'.format(i)))
             self.dense_batch_norm.append(tf.keras.layers.BatchNormalization(name='dense_batch_normalization_{}'.format(i)))
             self.dense_acti.append(tf.keras.layers.Activation(acti_den, name='dense_acti{}'.format(i)))
-        self.dense2 = tf.keras.layers.Dense(2, name='dense2')
+
+        n_last = 4 if mode == "p4_dm" else 2
+        self.dense2 = tf.keras.layers.Dense(n_last, name='dense2')
 
 
 
@@ -355,7 +357,7 @@ class MyGNN(tf.keras.Model):
                 x = self.acti_gnn[i](x)
 
 
-        if(self.mode == "p4"):
+        if "p4" in self.mode:
             xx_p4 = xx[:,:,self.map_features['pfCand_px']:self.map_features['pfCand_E']+1]
             xx_p4_shape = tf.shape(xx_p4)
             xx_p4_other = xx[:,:,self.map_features['pfCand_pt']:self.map_features['pfCand_mass']+1]
@@ -390,8 +392,12 @@ class MyGNN(tf.keras.Model):
         x = self.dense2(x)
 
         x_zeros = tf.zeros((x_shape[0], 2))
-        if(self.mode == "dm"): xout = tf.concat([x, x_zeros], axis=1)
-        else: xout = tf.concat([x_zeros, x], axis=1)
+        if(self.mode == "dm"):
+            xout = tf.concat([x, x_zeros], axis=1)
+        elif self.mode == "p4":
+            xout = tf.concat([x_zeros, x], axis=1)
+        else:
+            xout = x
 
         return xout
 
@@ -455,22 +461,22 @@ def my_acc(y_true, y_pred):
     return tf.cast(result, tf.float32)
 
 def my_mse_ch(y_true, y_pred):
-    def_mse = 0.19904320783179388
+    def_mse = 0.19802300936720527
     w = 1/def_mse
     return w*tf.square(y_true[:,0] - y_pred[:,0])
 
 def my_mse_neu(y_true, y_pred):
-    def_mse = np.array([0.4982084664239762])
+    def_mse = 0.4980008353282306
     w = 1/def_mse
     return w*tf.square(y_true[:,1] - y_pred[:,1])
 
 def my_mse_pt(y_true, y_pred):
-    def_mse = 37.541533469830576#2.194362470631832
+    def_mse = 0.022759110487849007 # relative
     w = 1/def_mse
-    return w*tf.square(y_true[:,2] - y_pred[:,2])
+    return w*tf.square((y_true[:,2] - y_pred[:,2]) / y_true[:,2])
 
 def my_mse_mass(y_true, y_pred):
-    def_mse = 0.5998682525160594
+    def_mse = 0.5968616152311431
     w = 1/def_mse
     return w*tf.square(y_true[:,3] - y_pred[:,3])
 
@@ -518,7 +524,7 @@ class MyResolution(tf.keras.metrics.Metric):
         raise RuntimeError("Im here")
         return MyResolution(config["name"], config["var_pos"], is_relative=config["is_relative"])
 
-pt_res_obj_rel = MyResolution('pt_res' , 2 ,True)
+pt_res_obj_rel = MyResolution('pt_res_rel' , 2 ,True)
 pt_res_obj     = MyResolution('pt_res' , 2 ,False)
 m2_res_obj     = MyResolution('m^2_res', 3 ,False)
 
@@ -556,31 +562,28 @@ class CustomMSE(keras.losses.Loss):
         super().__init__(name=name,**kwargs)
 
     def call(self, y_true, y_pred):
-        if(CustomMSE.mode == "dm"):
-            def_mse = np.array([0.19904320783179388, 0.4982084664239762])
-            w = 1/def_mse
-            mse1 = tf.square(y_true[:,0] - y_pred[:,0])
-            mse2 = tf.square(y_true[:,1] - y_pred[:,1])
-            return w[0]*mse1 + w[1]*mse2
-        elif(CustomMSE.mode=="p4"):
-            def_mse = np.array([37.541533469830576, 0.5998682525160594])
-            w = 1/def_mse
-            mse3 = tf.square(y_true[:,2] - y_pred[:,2])
-            mse4 = tf.square(y_true[:,3] - y_pred[:,3])
-            return w[0]*mse3 + w[1]*mse4
+        y_shape = tf.shape(y_true)
+        mse = tf.zeros(y_shape[0])
+        if "dm" in CustomMSE.mode:
+            mse = my_mse_ch(y_true, y_pred) + my_mse_neu(y_true, y_pred)
+        if "p4" in CustomMSE.mode:
+            mse = mse + my_mse_pt(y_true, y_pred) + my_mse_mass(y_true, y_pred)
+        return mse
 
 
 class ValidationCallback(tf.keras.callbacks.Callback):
     def __init__(self):
-        self.generator_val, self.n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_val, entry_stop_val)
+        self.generator_val, self.n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50_v2.root',entry_start_val, entry_stop_val)
         self.dataset = tf.data.Dataset.from_generator(self.generator_val,(tf.float32, tf.float32),\
                             (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,4])))
 
     def on_epoch_begin(self, epoch, logs=None):
         ### Reset the variables of class MyResolution:
         global pt_res_obj
+        global pt_res_obj_rel
         global m2_res_obj
         pt_res_obj.reset()
+        pt_res_obj_rel.reset()
         m2_res_obj.reset()
         print('Resolution reset done\n')
 

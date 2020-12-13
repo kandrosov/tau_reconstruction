@@ -73,8 +73,8 @@ else:
 history = training(mode = _mode, filename = _filename, parameters=parameters) # trains the model
 # history = training(mode = "p4")
 
-plot_metrics(history, mode = _mode, filename = _filename) # Plots the loss and accuracy curves for trainset and validationset
-# plot_metrics(history, mode = "p4") 
+#plot_metrics(history, mode = _mode, filename = _filename) # Plots the loss and accuracy curves for trainset and validationset
+# plot_metrics(history, mode = "p4")
 
 print('#######################################################\
       \n              Training finished !!!                  \n\
