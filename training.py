@@ -18,7 +18,7 @@ def training(mode, filename, parameters):
     model = MyGNN(mode=mode, map_features = _map_features, filename = filename, **parameters)#parameters = parameters) # creates the model
 
     ### Generator creation:
-    generator, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50_v2.root',entry_start, entry_stop)
+    generator, n_batches = make_generator(entry_start, entry_stop)
 
     print('\nCompilation of model:\n')
     CustomMSE.mode = mode

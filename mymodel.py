@@ -420,8 +420,8 @@ class MyGNN(tf.keras.Model):
 
 
 ### Function that creates generators:
-def make_generator(file_name, entry_begin, entry_end, z = False):
-    _data_loader = R.DataLoader(file_name, n_tau, entry_begin, entry_end)
+def make_generator(entry_begin, entry_end, z = False):
+    _data_loader = R.DataLoader(n_tau, entry_begin, entry_end)
     _n_batches   = _data_loader.NumberOfBatches()
 
     def _generator():
@@ -573,7 +573,7 @@ class CustomMSE(keras.losses.Loss):
 
 class ValidationCallback(tf.keras.callbacks.Callback):
     def __init__(self):
-        self.generator_val, self.n_batches_val = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50_v2.root',entry_start_val, entry_stop_val)
+        self.generator_val, self.n_batches_val = make_generator(entry_start_val, entry_stop_val)
         self.dataset = tf.data.Dataset.from_generator(self.generator_val,(tf.float32, tf.float32),\
                             (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,4])))
 

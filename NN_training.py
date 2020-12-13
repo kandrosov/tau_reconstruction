@@ -70,6 +70,8 @@ else:
 # }
 # parameters = args.params
 
+R.DataLoader.Initialize('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50_v2.root')
+
 history = training(mode = _mode, filename = _filename, parameters=parameters) # trains the model
 # history = training(mode = "p4")
 

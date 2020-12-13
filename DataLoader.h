@@ -67,18 +67,33 @@ string y_label_names[4] = {"Count_charged_hadrons", "Count_neutral_hadrons", "pt
 
 struct DataLoader {
 
-    static bool enableMT;
-
     //This is the constructor:
-    DataLoader(std::string _file_name, size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
-        file_name(_file_name), n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset)
+    DataLoader(size_t _n_tau, Long64_t _start_dataset, Long64_t _end_dataset) :
+        n_tau(_n_tau), current_entry(_start_dataset), start_dataset(_start_dataset), end_dataset(_end_dataset)
     {
-        Reset();
     }
 
-    std::string file_name;
-    std::shared_ptr<TFile> file;
-    std::shared_ptr<tau_tuple::TauTuple> tuple; // tuple is the tree
+    static void Initialize(std::string file_name)
+    {
+        static const std::set<std::string> enabled_branches = {
+            "tau_decayModeFindingNewDMs", "tau_index", "tau_decayMode", "tau_pt", "tau_eta", "tau_phi",
+            "tau_mass", "lepton_gen_vis_pdg", "pfCand_pt", "pfCand_hasTrackDetails", "pfCand_dz", "jet_index",
+            "pfCand_eta", "pfCand_phi", "pfCand_mass", "pfCand_pdgId", "pfCand_charge", "pfCand_pvAssociationQuality",
+            "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits",
+            "pfCand_numberOfPixelHits", "pfCand_numberOfHits", "pfCand_hasTrackDetails", "pfCand_dxy",
+            "pfCand_caloFraction", "pfCand_hcalFraction", "pfCand_rawCaloFraction", "pfCand_rawHcalFraction",
+            "pfCand_dxy_error", "pfCand_dz_error", "pfCand_track_chi2", "pfCand_track_ndof", "jet_eta", "jet_phi",
+            "lepton_gen_vis_pt", "lepton_gen_vis_eta", "lepton_gen_vis_phi", "lepton_gen_vis_mass"
+        };
+        static const std::set<std::string> disabled_branches = {};
+        if(tuple)
+            throw std::runtime_error("DataLoader is already initialized.");
+        file = OpenRootFile(file_name);
+        tuple = std::make_shared<tau_tuple::TauTuple>(file.get(), true, disabled_branches, enabled_branches);
+    }
+
+    static std::shared_ptr<TFile> file;
+    static std::shared_ptr<tau_tuple::TauTuple> tuple; // tuple is the tree
     size_t n_tau; // number of events(=taus)
     Long64_t start_dataset;
     Long64_t end_dataset;
@@ -109,9 +124,11 @@ struct DataLoader {
         return (current_entry + n_tau) < end_dataset;
     }
     std::shared_ptr<Data> LoadNext(){
-        auto data = std::make_shared<Data>(n_tau * n_pf * n_fe, n_tau * n_label, n_tau*(n_label-1)); // Creates an empty data structure
+
         if(!tuple)
-            throw std::runtime_error("Tuple is not set");
+            throw std::runtime_error("DataLoader is not initialized.");
+
+        auto data = std::make_shared<Data>(n_tau * n_pf * n_fe, n_tau * n_label, n_tau*(n_label-1)); // Creates an empty data structure
 
         for(size_t tau_ind = 0; tau_ind < n_tau; ++tau_ind, ++current_entry) {
             tuple->GetEntry(current_entry); // get the entry of the current event
@@ -172,7 +189,7 @@ struct DataLoader {
                 get_x(Feature::pfCand_eta)                  = tau.pfCand_eta.at(pf_ind_sorted);
                 get_x(Feature::pfCand_phi)                  = tau.pfCand_phi.at(pf_ind_sorted);
                 get_x(Feature::pfCand_mass)                 = tau.pfCand_mass.at(pf_ind_sorted);
-                get_x(Feature::pfCand_pdgId)                = tau.pfCand_pdgId.at(pf_ind_sorted);
+                get_x(Feature::pfCand_pdgId)                = std::abs(tau.pfCand_pdgId.at(pf_ind_sorted));
                 get_x(Feature::pfCand_charge)               = tau.pfCand_charge.at(pf_ind_sorted);
                 get_x(Feature::pfCand_pvAssociationQuality) = tau.pfCand_pvAssociationQuality.at(pf_ind_sorted);
                 get_x(Feature::pfCand_fromPV)               = tau.pfCand_fromPV.at(pf_ind_sorted);
@@ -237,14 +254,6 @@ struct DataLoader {
     // Resets the current entry to start_dataset so that we can loop on epochs:
     void Reset() {
         current_entry = start_dataset;
-        if(tuple)
-            tuple.reset();
-        if(file) {
-            file->Close();
-            file.reset();
-        }
-        file = OpenRootFile(file_name);
-        tuple = std::make_shared<tau_tuple::TauTuple>(file.get(), true);
     }
 
     // This function calculates the corresponding index in a 1D array:
@@ -305,10 +314,5 @@ struct DataLoader {
 
 };
 
-bool EnableMT()
-{
-    ROOT::EnableImplicitMT(4);
-    return true;
-}
-
-bool DataLoader::enableMT = EnableMT();
+std::shared_ptr<TFile> DataLoader::file;
+std::shared_ptr<tau_tuple::TauTuple> DataLoader::tuple;
