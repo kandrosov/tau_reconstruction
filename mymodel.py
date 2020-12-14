@@ -13,11 +13,11 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 33   # total muber of features: 24
 n_labels = 4#6    # number of labels per event
-n_epoch  = 2 #100  # number of epochs on which to train
-n_steps_val   = 10#1000 #14138
+n_epoch  = 100 #100  # number of epochs on which to train
+n_steps_val   = 1000 #14138
 n_steps_test  = 10 #63620  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-n_batch_training = 10#2000
+n_batch_training = 2000
 entry_stop    = n_batch_training*100 #6362169 # total number of events in the dataset = 14'215'297
 # 45% = 6'362'169
 # 10% = 1'413'815 (approximative calculations have been rounded)
@@ -295,7 +295,6 @@ class MyGNN(tf.keras.Model):
         self.dense            = []
         self.dense_batch_norm = []
         self.dense_acti       = []
-        # print('dropout type: ', type(self.dropout_rate)) # is a float
         if(self.dropout_rate > 0):
             self.dropout_gnn = []
             self.dropout_dense    = []
@@ -469,7 +468,7 @@ def make_generator(entry_begin, entry_end, z = False):
 #############################################################################################
 ##### Custom metrics:
 ### Accuracy calculation for number of charged/neutral hadrons:
-# @tf.function
+@tf.function
 def my_acc(y_true, y_pred):
     # print('\naccuracy calcualtion:')
     y_true = tf.math.round(y_true)
@@ -479,21 +478,25 @@ def my_acc(y_true, y_pred):
     result = tf.math.logical_and(y_true_int[:, 0] == y_pred_int[:, 0], y_true_int[:, 1] == y_pred_int[:, 1])
     return tf.cast(result, tf.float32)
 
+@tf.function
 def my_mse_ch(y_true, y_pred):
     def_mse = 0.19802300936720527
     w = 1/def_mse
     return w*tf.square(y_true[:,0] - y_pred[:,0])
 
+@tf.function
 def my_mse_neu(y_true, y_pred):
     def_mse = 0.4980008353282306
     w = 1/def_mse
     return w*tf.square(y_true[:,1] - y_pred[:,1])
 
+@tf.function
 def my_mse_pt(y_true, y_pred):
     def_mse = 0.022759110487849007 # relative
     w = 1/def_mse
     return w*tf.square((y_true[:,2] - y_pred[:,2]) / y_true[:,2])
 
+@tf.function
 def my_mse_mass(y_true, y_pred):
     def_mse = 0.5968616152311431
     w = 1/def_mse
@@ -510,6 +513,7 @@ class MyResolution(tf.keras.metrics.Metric):
         self.sum_x2      = self.add_weight(name="sum_x2", initializer="zeros")
         self.N           = self.add_weight(name="N", initializer="zeros")
 
+    @tf.function
     def update_state(self, y_true, y_pred, sample_weight=None):
         self.N.assign_add(tf.cast(tf.shape(y_true)[0], dtype=tf.float32))
         if(self.is_relative):
@@ -519,6 +523,7 @@ class MyResolution(tf.keras.metrics.Metric):
             self.sum_x.assign_add(tf.math.reduce_sum(y_pred[:,self.var_pos]   - y_true[:,self.var_pos]))
             self.sum_x2.assign_add(tf.math.reduce_sum((y_pred[:,self.var_pos] - y_true[:,self.var_pos])**2))
 
+    @tf.function
     def result(self):
         mean_x  = self.sum_x/self.N
         mean_x2 = self.sum_x2/self.N
@@ -580,6 +585,7 @@ class CustomMSE(keras.losses.Loss):
     def __init__(self, name="custom_mse", **kwargs):
         super().__init__(name=name,**kwargs)
 
+    @tf.function
     def call(self, y_true, y_pred):
         y_shape = tf.shape(y_true)
         mse = tf.zeros(y_shape[0])
