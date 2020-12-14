@@ -15,7 +15,7 @@ def training(mode, filename, parameters):
     mapOfy = R.DataLoader.MapCreationy()
 
     # print('map of features in training: ',map_features)
-    model = MyGNN(mode=mode, map_features = _map_features, filename = filename, **parameters)#parameters = parameters) # creates the model
+    model = MyGNN(mode=mode, map_features = _map_features, filename = filename, **parameters) # creates the model
 
     ### Generator creation:
     generator, n_batches = make_generator(entry_start, entry_stop)
@@ -38,7 +38,8 @@ def training(mode, filename, parameters):
 
     history = model.fit(x = tf.data.Dataset.from_generator(generator,(tf.float32, tf.float32),
                         (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,4]))),
-                        epochs = n_epoch, steps_per_epoch = n_batches, callbacks=[ValidationCallback(),early_stop, csv_logger])
+                        epochs = n_epoch, steps_per_epoch = n_batches, callbacks=[ValidationCallback(),early_stop, csv_logger],
+                        verbose=2)
 
     print('\nModel finished training.')
 

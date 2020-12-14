@@ -11,15 +11,14 @@ import os
 from mymodel import *
 
 ### Plots the loss and accuracy for the trainset and the validationset:
-def plot_metrics(history, mode, filename_plots):
+def plot_metrics(history, mode, filename):
     epochs = history.epoch
     hist   = pd.DataFrame(history.history)
     # print('\nPrint history: ',history.history)
     # for i in history.history:
     #     print(i)
 
-    if(mode == "p4"):
-
+    if("p4" in mode):
         fig0, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
         fig0.suptitle('Metrics')
         axes[0].set_ylabel("Loss", fontsize=14)
@@ -44,15 +43,14 @@ def plot_metrics(history, mode, filename_plots):
         axes[0].plot(epochs, hist["val_m2_res"], 'r*:' , label="val_m2_res") 
         axes[0].legend()
     
-
         # pdf0 = pp.PdfPages("data/cedrine/ModelTest/Metrics.pdf")
-        pdf0 = pp.PdfPages(os.path.join(filename_plots,"Metrics_p4.pdf"))
+        pdf0 = pp.PdfPages(os.path.join(filename,"Metrics_p4.pdf"))
         pdf0.savefig(fig0)
         pdf0.savefig(fig1)
         pdf0.close()
         plt.close()
     
-    else: 
+    if("dm" in mode): 
         fig0, axes = plt.subplots(2, sharex=False, figsize=(12, 8))
         fig0.suptitle('Metrics')
         axes[0].set_ylabel("Loss", fontsize=14)
@@ -78,11 +76,10 @@ def plot_metrics(history, mode, filename_plots):
         axes[0].plot(epochs, hist["val_my_mse_neu"],'r*:' , label="val mse_neu") 
         axes[0].legend()
 
-        pdf0 = pp.PdfPages("../Plots/Metrics_dm.pdf")
-        pdf0.savefig(fig0)
-        pdf0.savefig(fig1)
-        pdf0.close()
-        plt.close()
+        pdf1 = pp.PdfPages(os.path.join(filename,"Metrics_dm.pdf"))
+        pdf1.savefig(fig0)
+        pdf1.savefig(fig1)
+        pdf1.close()
 
 
 ### Plots the confusion matrix of decay modes:

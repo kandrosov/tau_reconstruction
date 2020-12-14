@@ -4,8 +4,8 @@ import json
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("output_filename", help="filename where to save the output")
-parser.add_argument("--mode", help="mode can be dm or p4 the default is dm")
-parser.add_argument("--params", help="model parameters")
+parser.add_argument("--mode", help="mode can be dm, p4 or p4_dm the default is dm")
+parser.add_argument("--params", help="model parameters. Example: --params { 'n_gnn_layers': 5, 'n_dim_gnn': 2, 'n_output_gnn': 50, 'n_output_gnn_last': 50, 'n_dense_layers': 4, 'n_dense_nodes': 200, 'wiring_mode': 'm3', 'dropout_rate' : 0.2 }")
 args = parser.parse_args()
 parameters = json.loads(args.params)
 
@@ -68,15 +68,12 @@ else:
 #       "n_dense_nodes": 100,
 #       "wiring_mode": "m1",
 # }
-# parameters = args.params
 
 R.DataLoader.Initialize('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50_v2.root')
 
 history = training(mode = _mode, filename = _filename, parameters=parameters) # trains the model
-# history = training(mode = "p4")
 
-#plot_metrics(history, mode = _mode, filename = _filename) # Plots the loss and accuracy curves for trainset and validationset
-# plot_metrics(history, mode = "p4")
+plot_metrics(history, mode = _mode, filename = _filename) # Plots the loss and accuracy curves for trainset and validationset
 
 print('#######################################################\
       \n              Training finished !!!                  \n\

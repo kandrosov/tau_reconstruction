@@ -62,7 +62,7 @@ else:
 
 CustomMSE.mode = _mode
 
-if(_mode=="dm"):
+if(_mode=="dm" or _mode =="p4_dm"):
       conf_dm_mat, conf_dm_mat_old = evaluation(mode = _mode, filename = _filename, epoch_number= _epoch_number) #creates the confusion matrices
 
       plt_conf_dm(conf_dm_mat, filename_plots = _filename_plots)  # Plots the configuration matrix of decay modes (truth vs. predicted)
@@ -75,6 +75,8 @@ if(_mode=="dm"):
 
 elif(_mode=="p4"):
       evaluation(mode = _mode, filename = _filename, epoch_number= _epoch_number) #creates the resolution plots
+else:
+      print('Mode not possible!!!')
 
 print('#######################################################\
       \n            Evaluation finished !!!                 \n\

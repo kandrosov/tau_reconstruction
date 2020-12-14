@@ -77,6 +77,8 @@ df = df.Define('gen_p4', 'GetGenP4(lepton_gen_vis_pt, lepton_gen_vis_eta, lepton
 
 
 df = df.Filter('gen_pt > 15')
+counting = df.Count()
+print('Number of entries: ', counting.GetValue()) #14138155
 
 mse_pt_rel = df.Mean('se_pt_rel')
 mse_m2 = df.Mean('se_m2')

@@ -13,14 +13,14 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 33   # total muber of features: 24
 n_labels = 4#6    # number of labels per event
-n_epoch  = 100 #100  # number of epochs on which to train
-n_steps_val   = 1000 #14213
-n_steps_test  = 10 #63970  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_epoch  = 2 #100  # number of epochs on which to train
+n_steps_val   = 10#1000 #14138
+n_steps_test  = 10 #63620  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-n_batch_training = 2000
-entry_stop    = n_batch_training*100 #6396973 # total number of events in the dataset = 14'215'297
-# 45% = 6'396'973
-# 10% = 1'421'351 (approximative calculations have been rounded)
+n_batch_training = 10#2000
+entry_stop    = n_batch_training*100 #6362169 # total number of events in the dataset = 14'215'297
+# 45% = 6'362'169
+# 10% = 1'413'815 (approximative calculations have been rounded)
 entry_start_val  = entry_stop +1
 entry_stop_val   = entry_stop + n_tau*n_steps_val + 1
 entry_start_test = entry_stop_val+1
@@ -41,7 +41,11 @@ print('Training stop entry: ', entry_stop)
 print('Validation start entry:', entry_start_val)
 print('Validation stop entry: ',entry_stop_val)
 print('Test start entry: ', entry_start_test)
-print('Test stop entry (<= 14215297): ',entry_stop_test,'\n')
+print('Test stop entry (<= 14138155): ',entry_stop_test,'\n')
+
+# print('Test stop entry (<= 14215297): ',entry_stop_test,'\n')
+# 45% = 6'396'973
+# 10% = 1'421'351 (approximative calculations have been rounded)
 
 
 
@@ -207,15 +211,16 @@ class MyGNNLayer(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, x, mask):
+        # print('check x shape 1: ', x)
         ### a and b contain copies for each pf_Cand:
         x_shape = tf.shape(x)
 
-        ## a tensor:
+        ## a tensor: a[n_tau, pf_others, pf, features]
         rep = tf.stack([1,x_shape[1],1])
         a   = tf.tile(x, rep)
         a   = tf.reshape(a,(x_shape[0],x_shape[1],x_shape[1],x_shape[2]))
 
-        ## b tensor:
+        ## b tensor: a[n_tau, pf, pf_others, features]
         rep = tf.stack([1,1,x_shape[1]])
         b   = tf.tile(x, rep)
         b   = tf.reshape(b,(x_shape[0],x_shape[1],x_shape[1],x_shape[2]))
@@ -229,7 +234,7 @@ class MyGNNLayer(tf.keras.layers.Layer):
         diff = tf.math.square(diff)
         dist = tf.math.reduce_sum(diff, axis = -1)
         dist = tf.reshape(dist,(c_shape[0],c_shape[1],c_shape[2],1)) # needed to concat
-        na   = tf.concat((a,dist),axis=-1)
+        na   = tf.concat((a,dist),axis=-1) #a[n_tau, pf_others, pf, features+1]
 
 
         ### Weighted sum of features:
@@ -241,15 +246,15 @@ class MyGNNLayer(tf.keras.layers.Layer):
         rep  = tf.stack([1,w_shape[1],1])
         mask_copy = tf.tile(mask, rep)
         mask_copy = tf.reshape(mask_copy,(w_shape[0],w_shape[1],w_shape[2],1))
+        # mask_copy = [n_tau, n_pf_others, n_pf, mask]
         s = na * w * mask_copy # weighted na
-        #ss = s[:,:,1:,:] # exclude the first one
-        #ss = tf.math.reduce_sum(ss, axis = 2) # weighted sum of features
-        #x = tf.concat((s[:,:,1,:],ss), axis = 2) # add to original features
-        ss = tf.math.reduce_sum(s, axis = 2) # weighted sum of features
+        ss = tf.math.reduce_sum(s, axis = 1) # weighted sum of features
+        # ss = [n_tau, n_pf, features+1]
         self_dist = tf.zeros((x_shape[0], x_shape[1], 1))
-        xx = tf.concat([x, self_dist], axis = 2)
-        ss = ss - xx
+        xx = tf.concat([x, self_dist], axis = 2) # [n_tau, n_pf, features+1]
+        ss = ss - xx # difference between weighted features and original ones
         x = tf.concat((x, ss), axis = 2) # add to original features
+        # print('check x shape 2: ', x) #(n_tau, n_pf, features*2+1)
 
 
         ### Ax+b:
@@ -276,6 +281,7 @@ class MyGNN(tf.keras.Model):
         self.n_dense_layers    = kwargs["n_dense_layers"]
         self.n_dense_nodes     = kwargs["n_dense_nodes"]
         self.wiring_mode       = kwargs["wiring_mode"]
+        self.dropout_rate      = kwargs["dropout_rate"]
 
         self.embedding1   = tf.keras.layers.Embedding(350,2)
         self.embedding2   = tf.keras.layers.Embedding(4  ,2)
@@ -283,36 +289,40 @@ class MyGNN(tf.keras.Model):
         self.normalize    = StdLayer('mean_std.txt', self.map_features, 5, name='std_layer')
         self.scale        = ScaleLayer('min_max.txt', self.map_features, [-1,1], name='scale_layer')
 
-        self.GNN_layers = []
-        self.batch_norm = []
-        self.acti_gnn   = []
-        self.dense      = []
+        self.GNN_layers  = []
+        self.batch_norm  = []
+        self.acti_gnn    = []
+        self.dense            = []
         self.dense_batch_norm = []
-        self.dense_acti = []
+        self.dense_acti       = []
+        # print('dropout type: ', type(self.dropout_rate)) # is a float
+        if(self.dropout_rate > 0):
+            self.dropout_gnn = []
+            self.dropout_dense    = []
 
         list_outputs = [self.n_output_gnn] * (self.n_gnn_layers-1) + [self.n_output_gnn_last]
         list_n_dim   = [2] + [self.n_dim_gnn] * (self.n_gnn_layers-1)
         self.n_gnn_layers = len(list_outputs)
         self.n_dense_layers = self.n_dense_layers
 
-        #if(mode=="dm"):
-        acti_den = "sigmoid"
-        #else:
-        #    acti_den = "relu"
-
         for i in range(self.n_gnn_layers):
             self.GNN_layers.append(MyGNNLayer(n_dim=list_n_dim[i], num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
             self.batch_norm.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
             self.acti_gnn.append(tf.keras.layers.Activation("tanh", name='acti_gnn_{}'.format(i)))
+            if(self.dropout_rate > 0):
+                self.dropout_gnn.append(tf.keras.layers.Dropout(self.dropout_rate ,name='dropout_gnn_{}'.format(i)))
 
         for i in range(self.n_dense_layers-1):
             self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, kernel_initializer="he_uniform",
                                 bias_initializer="he_uniform", name='dense_{}'.format(i)))
             self.dense_batch_norm.append(tf.keras.layers.BatchNormalization(name='dense_batch_normalization_{}'.format(i)))
-            self.dense_acti.append(tf.keras.layers.Activation(acti_den, name='dense_acti{}'.format(i)))
+            self.dense_acti.append(tf.keras.layers.Activation("sigmoid", name='dense_acti{}'.format(i)))
+            if(self.dropout_rate > 0):
+                self.dropout_dense.append(tf.keras.layers.Dropout(self.dropout_rate ,name='dropout_dense_{}'.format(i)))
 
         n_last = 4 if mode == "p4_dm" else 2
-        self.dense2 = tf.keras.layers.Dense(n_last, name='dense2')
+        self.dense2 = tf.keras.layers.Dense(n_last, kernel_initializer="he_uniform",
+                                bias_initializer="he_uniform", name='dense2')
 
 
 
@@ -341,11 +351,15 @@ class MyGNN(tf.keras.Model):
                     x0 = x
                 x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
+                if(self.dropout_rate > 0):
+                    x = self.dropout_gnn[i](x)
         elif(self.wiring_mode=="m1"):
             for i in range(self.n_gnn_layers):
                 x = self.GNN_layers[i](x, mask=x_mask)
                 x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
+                if(self.dropout_rate > 0):
+                    x = self.dropout_gnn[i](x)
         elif(self.wiring_mode=="m3"):
             for i in range(self.n_gnn_layers):
                 if(i%3==0 and i > 0):
@@ -355,9 +369,11 @@ class MyGNN(tf.keras.Model):
                     x0 = x
                 x = self.batch_norm[i](x)
                 x = self.acti_gnn[i](x)
+                if(self.dropout_rate > 0):
+                    x = self.dropout_gnn[i](x)
 
 
-        if "p4" in self.mode:
+        if("p4" in self.mode):
             xx_p4 = xx[:,:,self.map_features['pfCand_px']:self.map_features['pfCand_E']+1]
             xx_p4_shape = tf.shape(xx_p4)
             xx_p4_other = xx[:,:,self.map_features['pfCand_pt']:self.map_features['pfCand_mass']+1]
@@ -375,12 +391,12 @@ class MyGNN(tf.keras.Model):
 
             x = tf.concat([x, xx_p4, xx_p4_other], axis = 2)
 
-
             #xx_p4 = tf.reshape(xx_p4, (xx_p4_shape[0], xx_p4_shape[1] * xx_p4_shape[2]))
             x_shape = tf.shape(x)
             x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
             x = tf.concat([x, sum_p4, sum_p4_other], axis = 1)
-        else:
+            
+        elif("dm"==self.mode):
             x_shape = tf.shape(x)
             x = tf.reshape(x, (x_shape[0], x_shape[1] * x_shape[2]))
 
@@ -389,6 +405,8 @@ class MyGNN(tf.keras.Model):
             x = self.dense[i](x)
             x = self.dense_batch_norm[i](x)
             x = self.dense_acti[i](x)
+            if(self.dropout_rate > 0):
+                x = self.dropout_dense[i](x)
         x = self.dense2(x)
 
         x_zeros = tf.zeros((x_shape[0], 2))
@@ -399,6 +417,7 @@ class MyGNN(tf.keras.Model):
         else:
             xout = x
 
+        # print('xout shape: ',xout)
         return xout
 
     def ToPtM2(self, x):
@@ -592,7 +611,7 @@ class ValidationCallback(tf.keras.callbacks.Callback):
         # print("Log keys: {}".format(keys))
         print("\nValidation:")
 
-        myresults = self.model.evaluate(x = self.dataset, batch_size = self.n_batches_val, steps = n_steps_val)
+        myresults = self.model.evaluate(x = self.dataset, batch_size = self.n_batches_val, steps = n_steps_val, verbose=2)
         if len(self.model.metrics_names) == 1:
             i = self.model.metrics_names[0]
             logs["val_"+i] = myresults

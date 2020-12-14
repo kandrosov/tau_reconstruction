@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import json
 
 df = R.RDataFrame('taus','/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root')
+counting = df.Count()
+print('Number of entries: ', counting.GetValue())
 
 # feature_names = ["pfCand_pt", "pfCand_eta", "pfCand_phi", "pfCand_mass"]#, "pfCand_pdgId", "pfCand_charge", 
                 # "pfCand_pvAssociationQuality", "pfCand_fromPV", "pfCand_puppiWeight", "pfCand_puppiWeightNoLep", "pfCand_lostInnerHits", 
