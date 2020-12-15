@@ -33,6 +33,7 @@ def evaluation(mode, filename, epoch_number):
             "m2_res" : m2_res,
             "my_mse_pt"   : my_mse_pt,
             "my_mse_mass" : my_mse_mass,
+            "pt_res_rel" : pt_res_rel,
         }
     elif(mode=="p4_dm"):
         custom_objects = {
@@ -44,12 +45,13 @@ def evaluation(mode, filename, epoch_number):
             "m2_res" : m2_res,
             "my_mse_pt"   : my_mse_pt,
             "my_mse_mass" : my_mse_mass,
+            "pt_res_rel" : pt_res_rel,
         }
 
     model = tf.keras.models.load_model(os.path.join(filename,"my_model_{}".format(epoch_number)), custom_objects=custom_objects, compile=True)
     print("Model loaded.")
 
-    generator_xyz, n_batches = make_generator('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50.root',entry_start_test, entry_stop_test, z = True)
+    generator_xyz, n_batches = make_generator(entry_start_test, entry_stop_test, z = True)
 
     count_steps = 0
 
@@ -126,7 +128,7 @@ def evaluation(mode, filename, epoch_number):
 
         return conf_dm_mat, conf_dm_mat_old
     
-    elif(mode="p4_dm"):
+    elif(mode=="p4_dm"):
         conf_dm_mat = None
         conf_dm_mat_old = None
         dm_bins = [-0.5,0.5,1.5,2.5,3.5,9.5,10.5,11.5,12.5,23.5]
@@ -240,12 +242,12 @@ def evaluation(mode, filename, epoch_number):
         c1 = R.TCanvas( 'c1', '', 200, 10, 700, 500)
         legend1 = plot_res(h_pt_tot, def_h_pt_tot, "Relative difference for pt")
         legend1.Draw("SAMES")
-        c2 = R.TCanvas( 'c2', '', 200, 10, 700, 500)
-        legend2 = plot_res(h_eta_tot, def_h_eta_tot, "Absolute difference for eta")
-        legend2.Draw("SAMES")
-        c3 = R.TCanvas( 'c3', '', 200, 10, 700, 500)
-        legend3 = plot_res(h_phi_tot, def_h_phi_tot, "Absolute difference for phi")
-        legend3.Draw("SAMES")
+        # c2 = R.TCanvas( 'c2', '', 200, 10, 700, 500)
+        # legend2 = plot_res(h_eta_tot, def_h_eta_tot, "Absolute difference for eta")
+        # legend2.Draw("SAMES")
+        # c3 = R.TCanvas( 'c3', '', 200, 10, 700, 500)
+        # legend3 = plot_res(h_phi_tot, def_h_phi_tot, "Absolute difference for phi")
+        # legend3.Draw("SAMES")
         c4 = R.TCanvas( 'c4', '', 200, 10, 700, 500)
         legend4 = plot_res(h_m2_pi_tot, def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]")
         legend4.Draw("SAMES")
@@ -266,8 +268,8 @@ def evaluation(mode, filename, epoch_number):
         legend9.Draw("SAMES")
         c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf['))
         c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
-        c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
-        c3.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        # c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        # c3.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c4.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c5.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c6.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))

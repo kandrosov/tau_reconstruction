@@ -4,8 +4,8 @@ import os
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("saved_filename", help="filename where the model was saved and where the figures will be saved. Example: '/data/results/run1/' ")
-parser.add_argument("--mode", help="mode can be 'dm' or 'p4'. The default is 'dm'")
-parser.add_argument("--epoch_number", help="the epoch to evaluate. Default is 1.")
+parser.add_argument("--mode", help="mode can be 'dm', 'p4' or 'p4_dm'. The default is 'dm'")
+parser.add_argument("--epoch_number", help="the epoch to evaluate, counting from 1. Default is 1.")
 args = parser.parse_args()
 
 ######## Memory allocation:
@@ -37,6 +37,7 @@ from evaluation import evaluation
 print('\n#######################################################\
       \n            Evaluation start !!!                  \n\
 #######################################################')
+R.DataLoader.Initialize('/data/store/reco_skim_v1/tau_DYJetsToLL_M-50_v2.root')
 
 _filename = args.saved_filename #"/data/results/run1/" # + "mymodel_{}".format(epoch_number)
 

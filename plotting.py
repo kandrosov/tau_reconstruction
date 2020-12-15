@@ -101,8 +101,10 @@ def plt_conf_dm(conf_dm_mat, filename_plots, old = False):
     plt.tight_layout()
     if old == False:
         plt.savefig(os.path.join(filename_plots,"conf_dm_mat_predicted.pdf"))
+        plt.close()
     else: 
         plt.savefig(os.path.join(filename_plots,"conf_dm_mat_default.pdf"))
+        plt.close()
 
     # ### check the true distribution of the decay modes:
     # tot_dm = conf_dm_mat.sum(axis=1)

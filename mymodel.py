@@ -15,7 +15,7 @@ n_fe     = 33   # total muber of features: 24
 n_labels = 4#6    # number of labels per event
 n_epoch  = 100 #100  # number of epochs on which to train
 n_steps_val   = 1000 #14138
-n_steps_test  = 10 #63620  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_steps_test  = 1000 #63620  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
 n_batch_training = 2000
 entry_stop    = n_batch_training*100 #6362169 # total number of events in the dataset = 14'215'297
@@ -617,7 +617,7 @@ class ValidationCallback(tf.keras.callbacks.Callback):
         # print("Log keys: {}".format(keys))
         print("\nValidation:")
 
-        myresults = self.model.evaluate(x = self.dataset, batch_size = self.n_batches_val, steps = n_steps_val, verbose=2)
+        myresults = self.model.evaluate(x = self.dataset, batch_size = self.n_batches_val, steps = n_steps_val, verbose=1)
         if len(self.model.metrics_names) == 1:
             i = self.model.metrics_names[0]
             logs["val_"+i] = myresults

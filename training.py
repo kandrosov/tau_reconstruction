@@ -38,7 +38,7 @@ def training(mode, filename, parameters):
 
     history = model.fit(x = tf.data.Dataset.from_generator(generator,(tf.float32, tf.float32),
                         (tf.TensorShape([None,n_pf,n_fe]), tf.TensorShape([None,4]))),
-                        epochs = n_epoch, verbose=2, steps_per_epoch = n_batches, callbacks=[ValidationCallback(),early_stop, csv_logger])
+                        epochs = n_epoch, verbose=1, steps_per_epoch = n_batches, callbacks=[ValidationCallback(),early_stop, csv_logger])
 
     print('\nModel finished training.')
 
