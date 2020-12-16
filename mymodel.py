@@ -6,6 +6,7 @@ import json
 from ROOT import TLorentzVector
 import math
 import os
+import tensorflow_probability as tpf
 
 
 ### All the parameters:
@@ -195,16 +196,18 @@ class MyModel(tf.keras.Model):
         return xout
 
 class MyGNNLayer(tf.keras.layers.Layer):
-    def __init__(self, n_dim, num_outputs, **kwargs):
+    def __init__(self, n_dim, num_outputs, regu_rate, **kwargs):
         super(MyGNNLayer, self).__init__(**kwargs)
         self.n_dim        = n_dim
         self.num_outputs  = num_outputs
         self.supports_masking = True # to pass the mask to the next layers and not destroy it
+        self.regu_rate = regu_rate
 
     def build(self, input_shape):
         self.A = self.add_weight("A", shape=((input_shape[-1]+1) * 2 - 1, self.num_outputs),
-                                initializer="he_uniform", trainable=True)
-        self.b = self.add_weight("b", shape=(self.num_outputs,), initializer="he_uniform", trainable=True)
+                                initializer="he_uniform", regularizer=tf.keras.regularizers.L2(l2=self.regu_rate), trainable=True)
+        self.b = self.add_weight("b", shape=(self.num_outputs,), initializer="he_uniform", 
+                                regularizer=tf.keras.regularizers.L2(l2=self.regu_rate),trainable=True)
 
     def compute_output_shape(self, input_shape):
         return [input_shape[0], input_shape[1], self.num_outputs]
@@ -282,6 +285,10 @@ class MyGNN(tf.keras.Model):
         self.n_dense_nodes     = kwargs["n_dense_nodes"]
         self.wiring_mode       = kwargs["wiring_mode"]
         self.dropout_rate      = kwargs["dropout_rate"]
+        if(kwargs["regu_rate"]<0):
+            self.regu_rate = 0.01
+        else:
+            self.regu_rate         = kwargs["regu_rate"]
 
         self.embedding1   = tf.keras.layers.Embedding(350,2)
         self.embedding2   = tf.keras.layers.Embedding(4  ,2)
@@ -305,7 +312,7 @@ class MyGNN(tf.keras.Model):
         self.n_dense_layers = self.n_dense_layers
 
         for i in range(self.n_gnn_layers):
-            self.GNN_layers.append(MyGNNLayer(n_dim=list_n_dim[i], num_outputs=list_outputs[i], name='GNN_layer_{}'.format(i)))
+            self.GNN_layers.append(MyGNNLayer(n_dim=list_n_dim[i], num_outputs=list_outputs[i], regu_rate = self.regu_rate, name='GNN_layer_{}'.format(i)))
             self.batch_norm.append(tf.keras.layers.BatchNormalization(name='batch_normalization_{}'.format(i)))
             self.acti_gnn.append(tf.keras.layers.Activation("tanh", name='acti_gnn_{}'.format(i)))
             if(self.dropout_rate > 0):
@@ -313,13 +320,18 @@ class MyGNN(tf.keras.Model):
 
         for i in range(self.n_dense_layers-1):
             self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, kernel_initializer="he_uniform",
-                                bias_initializer="he_uniform", name='dense_{}'.format(i)))
+                                bias_initializer="he_uniform", kernel_regularizer=tf.keras.regularizers.L2(l2=self.regu_rate), 
+                                bias_regularizer=tf.keras.regularizers.L2(l2=self.regu_rate), name='dense_{}'.format(i)))
             self.dense_batch_norm.append(tf.keras.layers.BatchNormalization(name='dense_batch_normalization_{}'.format(i)))
             self.dense_acti.append(tf.keras.layers.Activation("sigmoid", name='dense_acti{}'.format(i)))
             if(self.dropout_rate > 0):
                 self.dropout_dense.append(tf.keras.layers.Dropout(self.dropout_rate ,name='dropout_dense_{}'.format(i)))
 
         n_last = 4 if mode == "p4_dm" else 2
+        self.dense_dm = tf.keras.layers.Dense(6, kernel_initializer="he_uniform",
+                                bias_initializer="he_uniform", activation="softmax", name='dense_dm')
+        self.dense_p4 = tf.keras.layers.Dense(2, kernel_initializer="he_uniform",
+                                bias_initializer="he_uniform", name='dense_p4')
         self.dense2 = tf.keras.layers.Dense(n_last, kernel_initializer="he_uniform",
                                 bias_initializer="he_uniform", name='dense2')
 
@@ -406,6 +418,12 @@ class MyGNN(tf.keras.Model):
             x = self.dense_acti[i](x)
             if(self.dropout_rate > 0):
                 x = self.dropout_dense[i](x)
+        ### dm 6 outputs:
+        # x_dm = self.dense_dm(x)
+        # x_p4 = self.dense_p4(x)
+        # return tf.concat([x_dm, x_p4], axis=1)
+        ###
+        
         x = self.dense2(x)
 
         x_zeros = tf.zeros((x_shape[0], 2))
@@ -478,30 +496,6 @@ def my_acc(y_true, y_pred):
     result = tf.math.logical_and(y_true_int[:, 0] == y_pred_int[:, 0], y_true_int[:, 1] == y_pred_int[:, 1])
     return tf.cast(result, tf.float32)
 
-@tf.function
-def my_mse_ch(y_true, y_pred):
-    def_mse = 0.19802300936720527
-    w = 1/def_mse
-    return w*tf.square(y_true[:,0] - y_pred[:,0])
-
-@tf.function
-def my_mse_neu(y_true, y_pred):
-    def_mse = 0.4980008353282306
-    w = 1/def_mse
-    return w*tf.square(y_true[:,1] - y_pred[:,1])
-
-@tf.function
-def my_mse_pt(y_true, y_pred):
-    def_mse = 0.022759110487849007 # relative
-    w = 1/def_mse
-    return w*tf.square((y_true[:,2] - y_pred[:,2]) / y_true[:,2])
-
-@tf.function
-def my_mse_mass(y_true, y_pred):
-    def_mse = 0.5968616152311431
-    w = 1/def_mse
-    return w*tf.square(y_true[:,3] - y_pred[:,3])
-
 
 ### Resolution of 4-momentum:
 class MyResolution(tf.keras.metrics.Metric):
@@ -567,16 +561,132 @@ def m2_res(y_true, y_pred, sample_weight=None):
     m2_res_obj.update_state(y_true, y_pred)
     return m2_res_obj.result()
 
-def decay_mode_histo(x1, x2, dm_bins):
-    decay_mode = np.zeros((x1.shape[0],2))
-    decay_mode[:,0] = x1
-    decay_mode[:,1] = x2
-    h_dm, _ = np.histogramdd(decay_mode, bins=[dm_bins,dm_bins])
-    h_dm[:,-1] = h_dm[:,4]+h_dm[:,-1] # sum the last and 4. column into the last column
-    h_dm = np.delete(h_dm,4,1)        # delete the 4. column
-    h_dm[-1,:] = h_dm[4,:]+h_dm[-1,:] # sum the last and 4. column into the last column
-    h_dm = np.delete(h_dm,4,0)        # delete the 4. column
-    return h_dm
+@tf.function
+def my_mse_ch(y_true, y_pred):
+    def_mse = 0.19802300936720527
+    w = tf.constant(1/def_mse)
+    # new_w = tf.where(tf.logical_and(y_true[:,0] == 1, y_true[:,1] == 0), w*2, w)
+    # new_w = tf.where(y_true[:,0] == 1, w*2, w)
+    return w*tf.square(y_true[:,0] - y_pred[:,0])
+
+# @tf.function
+def my_mse_neu(y_true, y_pred):
+    def_mse = 0.4980008353282306
+    w = 1/def_mse
+    # new_w = tf.where(tf.logical_and(y_true[:,0] == 1, y_true[:,1] == 0), w*2, w)
+    # new_w = tf.where(y_true[:,0] == 1, w*2, w)
+    return w*tf.square(y_true[:,1] - y_pred[:,1])
+
+cat_cross = tf.keras.losses.CategoricalCrossentropy()
+
+def my_cat_dm(y_true, y_pred):
+    global cat_cross
+    y_true_cat = convert_y(y_true)
+    return cat_cross(y_true_cat, y_pred[:, :6])
+
+@tf.function
+def my_mse_pt(y_true, y_pred):
+    def_mse = 0.022759110487849007 # relative
+    w = 1/def_mse
+    # return w*tf.square((y_true[:,2] - y_pred[:,6]) / y_true[:,2]) # dm 6 outputd
+    return w*tf.square((y_true[:,2] - y_pred[:,2]) / y_true[:,2])
+
+@tf.function
+def my_mse_mass(y_true, y_pred):
+    def_mse = 0.5968616152311431
+    w = 1/def_mse
+    # return w*tf.square(y_true[:,3] - y_pred[:,7]) # dm 6 outputs
+    return w*tf.square(y_true[:,3] - y_pred[:,3])
+
+#############################################################
+##### new metrics
+@tf.function
+def log_cosh_pt(y_true, y_pred):
+    # def_val = 0.01097714248585314 # without *100
+    # def_val = 0.5961012601878 # with *10
+    # def_val = 9.210500832319457 # with *100
+    # def_val = 4.3278327706899 # *50
+    def_val = 1.4785428311515774 # *20 and *30
+    # def_val = 3.3668514079633973 #*40
+    w = 1/def_val
+    delta_pt_rel = (y_true[:,2] - y_pred[:,2]) / y_true[:,2]
+    output = tf.math.log(tf.math.cosh(delta_pt_rel*30))
+    return w*output
+
+@tf.function
+def log_cosh_mass(y_true, y_pred):
+    # def_val = 0.20604327826842186 # without * 100
+    # def_val = 45.1603939803365 # with * 100
+    # def_val = 22.301361586255634 # *50
+    # def_val = 8.612943444728497 # *20
+    def_val = 8.612943444728497 # *30
+    # def_val = 17.733670178795087 # *40
+    w = 1/def_val
+    delta_mass = y_true[:,3] - y_pred[:,3]
+    output = tf.math.log(tf.math.cosh(delta_mass*30))
+    return w*output
+
+@tf.function
+def my_mse_ch_4(y_true, y_pred):
+    def_mse = 0.6809799439884483
+    w = 1/def_mse
+    return w*tf.pow(y_true[:,0] - y_pred[:,0],4)
+
+@tf.function
+def my_mse_neu_4(y_true, y_pred):
+    def_mse = 1.2626542147826219
+    w = 1/def_mse
+    return w*tf.pow(y_true[:,1] - y_pred[:,1],4)
+
+@tf.function
+def my_mse_pt_4(y_true, y_pred):
+    def_mse = 0.02982611302398386
+    w = 1/def_mse
+    return w*tf.pow((y_true[:,2] - y_pred[:,2]) / y_true[:,2],4)
+
+@tf.function
+def my_mse_mass_4(y_true, y_pred):
+    def_mse = 18.941287385879463
+    w = 1/def_mse
+    return w*tf.pow(y_true[:,3] - y_pred[:,3],4)
+
+def quantile_pt(y_true, y_pred):
+    a_def = 0.09867886998338264
+    # b_def = 0.12375059356959137 #75-25
+    b_def = 0.043592315013624615 # 60-40
+    w_a = 1/a_def
+    w_b = 1/b_def
+    delta_pt_rel = (y_true[:,2] - y_pred[:,2]) / y_true[:,2]
+    # q75 = tpf.stats.percentile(delta_pt_rel,75, interpolation='linear')
+    # q25 = tpf.stats.percentile(delta_pt_rel,25, interpolation='linear')
+    # return w_a*0.2*tf.math.abs(delta_pt_rel) + w_b*0.8*tf.math.abs(q75-q25)
+    q60 = tpf.stats.percentile(delta_pt_rel,60, interpolation='linear')
+    q40 = tpf.stats.percentile(delta_pt_rel,40, interpolation='linear')
+    return w_a*0.5*tf.math.abs(delta_pt_rel) + w_b*0.5*tf.math.abs(q60-q40)
+
+def my_mse_ch_new(y_true, y_pred):
+    def_mse = 0.19802300936720527
+    w = 1/def_mse # ca. 5.0505
+    w2 = w+1
+    return tf.where(y_true[:,0]== 1, w2*tf.square(y_true[:,0] - y_pred[:,0]), w*tf.square(y_true[:,0] - y_pred[:,0]))
+
+@tf.function
+def my_mse_neu_new(y_true, y_pred):
+    def_mse = 0.4980008353282306
+    w = 1/def_mse # ca. 2.008
+    w2 = w+1
+    return tf.where(y_true[:,1]==0,w2*tf.square(y_true[:,1] - y_pred[:,1]),w*tf.square(y_true[:,1] - y_pred[:,1]))
+
+
+def convert_y(y):
+    pi = tf.cast(tf.logical_and(y[:, 0] == 1, y[:, 1] == 0), tf.float32)
+    pip0 = tf.cast(tf.logical_and(y[:, 0] == 1, y[:, 1] == 1), tf.float32)
+    pi2p0 = tf.cast(tf.logical_and(y[:, 0] == 1, y[:, 1] == 2), tf.float32)
+    pipipi = tf.cast(tf.logical_and(y[:, 0] == 3, y[:, 1] == 0), tf.float32)
+    pipipip0 = tf.cast(tf.logical_and(y[:, 0] == 3, y[:, 1] == 1), tf.float32)
+    other = 1 - (pi + pip0 + pi2p0 + pipipi + pipipip0)
+
+    return tf.stack([pi, pip0, pi2p0, pipipi, pipipip0, other], axis = 1)
 
 ##### Custom loss function:
 class CustomMSE(keras.losses.Loss):
@@ -591,8 +701,17 @@ class CustomMSE(keras.losses.Loss):
         mse = tf.zeros(y_shape[0])
         if "dm" in CustomMSE.mode:
             mse = my_mse_ch(y_true, y_pred) + my_mse_neu(y_true, y_pred)
+            # mse = my_cat_dm(y_true, y_pred)
+            # mse = my_mse_ch_4(y_true, y_pred) + my_mse_neu_4(y_true, y_pred)
+            # mse = my_mse_ch_new(y_true, y_pred) + my_mse_neu_new(y_true, y_pred)
         if "p4" in CustomMSE.mode:
             mse = mse + my_mse_pt(y_true, y_pred) + my_mse_mass(y_true, y_pred)
+            # mse = mse + 0.01 * (my_mse_pt(y_true, y_pred) + my_mse_mass(y_true, y_pred))
+            # mse = mse + 0.1 * (my_mse_pt(y_true, y_pred) + my_mse_mass(y_true, y_pred))
+            # mse = mse + my_mse_pt(y_true, y_pred) + my_mse_mass(y_true, y_pred) + log_cosh_pt(y_true,y_pred) + log_cosh_mass(y_true,y_pred)
+            # mse = mse + my_mse_pt(y_true, y_pred) + my_mse_mass(y_true, y_pred) + log_cosh_mass(y_true,y_pred)
+            # mse = mse + my_mse_pt_4(y_true, y_pred) + my_mse_mass_4(y_true, y_pred)
+            # mse = mse + my_mse_pt(y_true, y_pred) + my_mse_mass(y_true, y_pred) + quantile_pt(y_true, y_pred)
         return mse
 
 
@@ -630,3 +749,16 @@ class ValidationCallback(tf.keras.callbacks.Callback):
         ### Save the entire models:
         self.model.save(os.path.join(self.model.filename,"my_model_{}".format(epoch+1)),save_format='tf')
         print('Model is saved.')
+
+
+
+def decay_mode_histo(x1, x2, dm_bins):
+    decay_mode = np.zeros((x1.shape[0],2))
+    decay_mode[:,0] = x1
+    decay_mode[:,1] = x2
+    h_dm, _ = np.histogramdd(decay_mode, bins=[dm_bins,dm_bins])
+    h_dm[:,-1] = h_dm[:,4]+h_dm[:,-1] # sum the last and 4. column into the last column
+    h_dm = np.delete(h_dm,4,1)        # delete the 4. column
+    h_dm[-1,:] = h_dm[4,:]+h_dm[-1,:] # sum the last and 4. column into the last column
+    h_dm = np.delete(h_dm,4,0)        # delete the 4. column
+    return h_dm

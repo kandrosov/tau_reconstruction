@@ -112,14 +112,22 @@ def plt_conf_dm(conf_dm_mat, filename_plots, old = False):
     # tot_dm_norm = tot_dm/tot_dm.sum()
     # print('Probabilities of decay mode for true: \n',tot_dm_norm,'\n')
 
-def accuracy_calc(conf_dm_mat, filename_plots, old = False):
+def accuracy_calc(conf_dm_mat, filename_plots, old = False, normalization_line = True):
     ## Normalization of cond_dm_mat:
     conf_dm_mat_norm = conf_dm_mat
-    for i in range(0,len(conf_dm_mat[0,:])):
-        summy = 0
-        summy = conf_dm_mat[i,:].sum() # sum of line => normalize lines
-        if (summy != 0):
-            conf_dm_mat_norm[i,:] = conf_dm_mat[i,:]/summy
+    if(normalization_line==True):
+        for i in range(0,len(conf_dm_mat[0,:])):
+            summy = 0
+            summy = conf_dm_mat[i,:].sum() # sum of line => normalize lines
+            if (summy != 0):
+                conf_dm_mat_norm[i,:] = conf_dm_mat[i,:]/summy
+    else:
+        conf_dm_mat_norm = conf_dm_mat
+        for i in range(0,len(conf_dm_mat_norm[0,:])):
+            summy = 0
+            summy = conf_dm_mat_norm.sum() # sum of column => normalize columns
+            if (summy != 0):
+                conf_dm_mat_norm[:,i] = conf_dm_mat_norm[:,i]/summy
 
     x_axis_labels = ['$\pi^{\pm}$','$\pi^{\pm} + \pi^0$', '$\pi^{\pm} + 2\pi^0$', \
                  '$\pi^{\pm} + 3\pi^0$','$3\pi^{\pm}$', '$3\pi^{\pm} + 1\pi^0$',\
@@ -139,9 +147,15 @@ def accuracy_calc(conf_dm_mat, filename_plots, old = False):
     plt.tight_layout()
     # plt.show()
     if(old==False):
-        pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_predicted.pdf"))
+        if(normalization_line==True):
+            pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_predicted.pdf"))
+        else:
+            pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_predicted_col.pdf"))
     else:
-        pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_default.pdf"))
+        if(normalization_line==True):
+            pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_default.pdf"))
+        else:
+            pdf = pp.PdfPages(os.path.join(filename_plots,"conf_dm_mat_norm_default_col.pdf"))
     pdf.savefig(fig)
     pdf.close()
     plt.close()

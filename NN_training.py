@@ -5,7 +5,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("output_filename", help="filename where to save the output")
 parser.add_argument("--mode", help="mode can be dm, p4 or p4_dm the default is dm")
-parser.add_argument("--params", help="model parameters. Example: --params { 'n_gnn_layers': 5, 'n_dim_gnn': 2, 'n_output_gnn': 50, 'n_output_gnn_last': 50, 'n_dense_layers': 4, 'n_dense_nodes': 200, 'wiring_mode': 'm3', 'dropout_rate' : 0.2 }")
+parser.add_argument("--params", help="model parameters. Example: --params { 'n_gnn_layers': 5, 'n_dim_gnn': 2, 'n_output_gnn': 50, 'n_output_gnn_last': 50, 'n_dense_layers': 4, 'n_dense_nodes': 200, 'wiring_mode': 'm3', 'dropout_rate' : 0.2 , 'regu_rate':0.01}. regu_rate if < 0 the default value of 0.01 is set.")
 args = parser.parse_args()
 parameters = json.loads(args.params)
 
@@ -17,7 +17,7 @@ if gpus:
   try:
     tf.config.experimental.set_virtual_device_configuration(
         gpus[0],
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6000)]) # ca. 50% => uses effectively 7921MB
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4000)]) # ca. 50% => uses effectively 7921MB
     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:

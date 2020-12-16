@@ -38,14 +38,24 @@ def evaluation(mode, filename, epoch_number):
     elif(mode=="p4_dm"):
         custom_objects = {
             "CustomMSE": CustomMSE,
-            "my_acc" : my_acc,
-            "my_mse_ch"   : my_mse_ch,
-            "my_mse_neu"  : my_mse_neu,
-            "pt_res" : pt_res,
-            "m2_res" : m2_res,
+            "my_cat_dm" : my_cat_dm,
+            # "my_acc" : my_acc,
+            # "my_mse_ch"   : my_mse_ch,
+            # "my_mse_neu"  : my_mse_neu,
             "my_mse_pt"   : my_mse_pt,
             "my_mse_mass" : my_mse_mass,
+            "pt_res" : pt_res,
+            "m2_res" : m2_res,
             "pt_res_rel" : pt_res_rel,
+            # "my_mse_ch_new"   : my_mse_ch_new,
+            # "my_mse_neu_new"  : my_mse_neu_new,
+            # "quantile_pt" : quantile_pt,
+            # "log_cosh_pt" : log_cosh_pt,
+            # "log_cosh_mass" : log_cosh_mass,
+            # "my_mse_ch_4"   : my_mse_ch_4,
+            # "my_mse_neu_4"  : my_mse_neu_4,
+            # "my_mse_pt_4"   : my_mse_pt_4,
+            # "my_mse_mass_4" : my_mse_mass_4,
         }
 
     model = tf.keras.models.load_model(os.path.join(filename,"my_model_{}".format(epoch_number)), custom_objects=custom_objects, compile=True)
@@ -95,7 +105,6 @@ def evaluation(mode, filename, epoch_number):
         c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf]'))
-
 
     elif(mode=="dm"):
         conf_dm_mat = None
@@ -157,6 +166,11 @@ def evaluation(mode, filename, epoch_number):
         c_true_m = R.TH1F('c_true_m', 'test true', 200, -2, 4)
         c_def_m  = R.TH1F('c_def_m', 'test def'  , 200, -2, 4)
 
+        ### quantile part:
+        delta_pt = None
+        def_delta_pt = None
+        ### end quantile part
+
         print('\nStart generator loop to predict:\n')
 
         for x,y,z in generator_xyz(): # y is a (n_tau,n_labels) array
@@ -168,7 +182,25 @@ def evaluation(mode, filename, epoch_number):
             y_pred_r = np.round(y_pred,0)
 
             ### Decay mode comparison to new reconstruction:
-            h_dm = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], (y_pred_r[:,0]-1)*5 + y_pred_r[:,1], dm_bins)
+            # h_dm = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], (y_pred_r[:,0]-1)*5 + y_pred_r[:,1], dm_bins)
+            
+            ##### dm 6 outputs part:
+            dm = tf.constant([0,1,2,10,11,5])
+            y_shape= tf.shape(y_pred_r)
+            dm_mode = None
+            for i in range(y_shape[0]):
+                indice = tf.math.argmax(y_pred_r[i,:6])
+                if dm_mode is None:
+                    dm_mode = dm[indice]
+                else:
+                    a = tf.reshape(dm[indice],(1,))
+                    # print('a: ',a)
+                    dm_mode = tf.reshape(dm_mode,(i,))
+                    # print('dm_mode: ',dm_mode)
+                    dm_mode = tf.concat((dm_mode,a), axis = 0)
+            
+            h_dm = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], dm_mode, dm_bins)
+            #### end of dm 6 output part
 
             ### Decay mode comparison to old reconstruction:
             h_dm_old = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], z[:,0], dm_bins)
@@ -180,6 +212,18 @@ def evaluation(mode, filename, epoch_number):
             true_dm = (y_true[:,0]  -1)*5 + y_true[:,1]
             pred_dm = (y_pred_r[:,0]-1)*5 + y_pred_r[:,1]
             def_dm  = z[:,0]
+
+            ### Quantile part:
+            if delta_pt is None:
+                delta_pt = (y_pred[:,2]-y_true[:,2])/y_true[:,2]
+                def_delta_pt = (z[:,1]-y_true[:,2])/y_true[:,2]
+            else: 
+                a = (y_pred[:,2]-y_true[:,2])/y_true[:,2]
+                b = (z[:,1]-y_true[:,2])/y_true[:,2]
+                delta_pt = tf.concat([delta_pt,a], axis = 0)
+                def_delta_pt = tf.concat([def_delta_pt,b], axis = 0)
+            ##### end quantile part
+
 
             for dm in true_dm:
                 h_pt_tot.Fill((y_pred[l,2]-y_true[l,2])/y_true[l,2])
@@ -233,12 +277,56 @@ def evaluation(mode, filename, epoch_number):
                 conf_dm_mat_old += h_dm_old
                 
             count_steps += 1
-            if count_steps % 1000 == 0: print('Test set at the:',count_steps,'th event')
+            if count_steps % 100 == 0: print('Test set at the:',count_steps,'th event')
             if count_steps >= n_steps_test: break
+
+        ### Quantile part:
+        q = np.arange(0,101,1)
+        # q = np.arange(0,100,0.1)
+        # print(q)# da 0 a 100 inclusi
+        # print(len(q)) # = 101
+        quantile_array = None
+        def_quantile_array = None
+        counter = 0
+        for i in q:
+            # print('************ ',i,' ***********')
+            if quantile_array is None:
+                quantile_array = tpf.stats.percentile(delta_pt,i, interpolation='linear')
+                def_quantile_array = tpf.stats.percentile(def_delta_pt,i, interpolation='linear')
+            else:
+                b = quantile_array
+                b = tf.reshape(b,(counter,))
+                a = tpf.stats.percentile(delta_pt,i, interpolation='linear')
+                # print(counter)
+                a = tf.reshape(a,(1,))
+                # print('a: ',a)
+                quantile_array = tf.concat([b,a], axis = 0)
+                # print('quantile_array: ',quantile_array)
+
+                b = def_quantile_array
+                b = tf.reshape(b,(counter,))
+                a = tpf.stats.percentile(def_delta_pt,i, interpolation='linear')
+                a = tf.reshape(a,(1,))
+                # print('a: ',a)
+                def_quantile_array = tf.concat([b,a], axis = 0)
+                # print('def_quantile_array: ',def_quantile_array)
+            counter += 1
+
+
+        np.savetxt('quantile_evaluation.csv', [quantile_array,def_quantile_array], delimiter=',')
+        ### end quantile part
+
 
         ##################################################################################
         R.gROOT.SetBatch(True)
 
+        ## Save pt histograms to a root file:
+        # f = R.TFile.Open("pt_histograms.root","RECREATE")
+        # h_pt_tot.Write()
+        # def_h_pt_tot.Write()
+        # f.Close()
+
+        ### Make and save figures:
         c1 = R.TCanvas( 'c1', '', 200, 10, 700, 500)
         legend1 = plot_res(h_pt_tot, def_h_pt_tot, "Relative difference for pt")
         legend1.Draw("SAMES")
