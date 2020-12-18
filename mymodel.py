@@ -14,11 +14,11 @@ n_tau    = 100 # number of taus (or events) per batch
 n_pf     = 50 #100 # number of pf candidates per event
 n_fe     = 33   # total muber of features: 24
 n_labels = 4#6    # number of labels per event
-n_epoch  = 100 #100  # number of epochs on which to train
-n_steps_val   = 1000 #14138
-n_steps_test  = 1000 #63620  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
+n_epoch  = 1000 #100  # number of epochs on which to train
+n_steps_val   = 14138
+n_steps_test  = 63621  # number of steps in the evaluation: (events in conf_dm_mat) = n_steps * n_tau
 entry_start   = 0
-n_batch_training = 2000
+n_batch_training = 63622
 entry_stop    = n_batch_training*100 #6362169 # total number of events in the dataset = 14'215'297
 # 45% = 6'362'169
 # 10% = 1'413'815 (approximative calculations have been rounded)
@@ -44,9 +44,6 @@ print('Validation stop entry: ',entry_stop_val)
 print('Test start entry: ', entry_start_test)
 print('Test stop entry (<= 14138155): ',entry_stop_test,'\n')
 
-# print('Test stop entry (<= 14215297): ',entry_stop_test,'\n')
-# 45% = 6'396'973
-# 10% = 1'421'351 (approximative calculations have been rounded)
 
 
 
@@ -204,17 +201,22 @@ class MyGNNLayer(tf.keras.layers.Layer):
         self.regu_rate = regu_rate
 
     def build(self, input_shape):
-        self.A = self.add_weight("A", shape=((input_shape[-1]+1) * 2 - 1, self.num_outputs),
-                                initializer="he_uniform", regularizer=tf.keras.regularizers.L2(l2=self.regu_rate), trainable=True)
-        self.b = self.add_weight("b", shape=(self.num_outputs,), initializer="he_uniform", 
-                                regularizer=tf.keras.regularizers.L2(l2=self.regu_rate),trainable=True)
+        if(self.regu_rate < 0):
+            self.A = self.add_weight("A", shape=((input_shape[-1]+1) * 2 - 1, self.num_outputs),
+                                    initializer="he_uniform", trainable=True)
+            self.b = self.add_weight("b", shape=(self.num_outputs,), initializer="he_uniform",trainable=True)
+        else:
+            self.A = self.add_weight("A", shape=((input_shape[-1]+1) * 2 - 1, self.num_outputs),
+                                    initializer="he_uniform", regularizer=tf.keras.regularizers.L2(l2=self.regu_rate), trainable=True)
+            self.b = self.add_weight("b", shape=(self.num_outputs,), initializer="he_uniform", 
+                                    regularizer=tf.keras.regularizers.L2(l2=self.regu_rate),trainable=True)
+
 
     def compute_output_shape(self, input_shape):
         return [input_shape[0], input_shape[1], self.num_outputs]
 
     @tf.function
     def call(self, x, mask):
-        # print('check x shape 1: ', x)
         ### a and b contain copies for each pf_Cand:
         x_shape = tf.shape(x)
 
@@ -285,10 +287,7 @@ class MyGNN(tf.keras.Model):
         self.n_dense_nodes     = kwargs["n_dense_nodes"]
         self.wiring_mode       = kwargs["wiring_mode"]
         self.dropout_rate      = kwargs["dropout_rate"]
-        if(kwargs["regu_rate"]<0):
-            self.regu_rate = 0.01
-        else:
-            self.regu_rate         = kwargs["regu_rate"]
+        self.regu_rate         = kwargs["regu_rate"]
 
         self.embedding1   = tf.keras.layers.Embedding(350,2)
         self.embedding2   = tf.keras.layers.Embedding(4  ,2)
@@ -319,7 +318,11 @@ class MyGNN(tf.keras.Model):
                 self.dropout_gnn.append(tf.keras.layers.Dropout(self.dropout_rate ,name='dropout_gnn_{}'.format(i)))
 
         for i in range(self.n_dense_layers-1):
-            self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, kernel_initializer="he_uniform",
+            if(self.regu_rate < 0):
+                self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, kernel_initializer="he_uniform",
+                                    bias_initializer="he_uniform", name='dense_{}'.format(i)))
+            else:
+                self.dense.append(tf.keras.layers.Dense(self.n_dense_nodes, kernel_initializer="he_uniform",
                                 bias_initializer="he_uniform", kernel_regularizer=tf.keras.regularizers.L2(l2=self.regu_rate), 
                                 bias_regularizer=tf.keras.regularizers.L2(l2=self.regu_rate), name='dense_{}'.format(i)))
             self.dense_batch_norm.append(tf.keras.layers.BatchNormalization(name='dense_batch_normalization_{}'.format(i)))
@@ -328,10 +331,10 @@ class MyGNN(tf.keras.Model):
                 self.dropout_dense.append(tf.keras.layers.Dropout(self.dropout_rate ,name='dropout_dense_{}'.format(i)))
 
         n_last = 4 if mode == "p4_dm" else 2
-        self.dense_dm = tf.keras.layers.Dense(6, kernel_initializer="he_uniform",
-                                bias_initializer="he_uniform", activation="softmax", name='dense_dm')
-        self.dense_p4 = tf.keras.layers.Dense(2, kernel_initializer="he_uniform",
-                                bias_initializer="he_uniform", name='dense_p4')
+        # self.dense_dm = tf.keras.layers.Dense(6, kernel_initializer="he_uniform",
+        #                         bias_initializer="he_uniform", activation="softmax", name='dense_dm')
+        # self.dense_p4 = tf.keras.layers.Dense(2, kernel_initializer="he_uniform",
+        #                         bias_initializer="he_uniform", name='dense_p4')
         self.dense2 = tf.keras.layers.Dense(n_last, kernel_initializer="he_uniform",
                                 bias_initializer="he_uniform", name='dense2')
 
@@ -340,7 +343,6 @@ class MyGNN(tf.keras.Model):
 
     @tf.function
     def call(self, xx):
-
         x_mask = xx[:,:,self.map_features['pfCand_valid']]
 
         x_em1 = self.embedding1(tf.abs(xx[:,:,self.map_features['pfCand_pdgId']]))
@@ -610,7 +612,7 @@ def log_cosh_pt(y_true, y_pred):
     # def_val = 3.3668514079633973 #*40
     w = 1/def_val
     delta_pt_rel = (y_true[:,2] - y_pred[:,2]) / y_true[:,2]
-    output = tf.math.log(tf.math.cosh(delta_pt_rel*30))
+    output = tf.math.log(tf.math.cosh(delta_pt_rel*20))
     return w*output
 
 @tf.function
@@ -618,12 +620,11 @@ def log_cosh_mass(y_true, y_pred):
     # def_val = 0.20604327826842186 # without * 100
     # def_val = 45.1603939803365 # with * 100
     # def_val = 22.301361586255634 # *50
-    # def_val = 8.612943444728497 # *20
-    def_val = 8.612943444728497 # *30
+    def_val = 8.612943444728497 # *20 and *30
     # def_val = 17.733670178795087 # *40
     w = 1/def_val
     delta_mass = y_true[:,3] - y_pred[:,3]
-    output = tf.math.log(tf.math.cosh(delta_mass*30))
+    output = tf.math.log(tf.math.cosh(delta_mass*20))
     return w*output
 
 @tf.function
@@ -729,6 +730,8 @@ class ValidationCallback(tf.keras.callbacks.Callback):
         pt_res_obj.reset()
         pt_res_obj_rel.reset()
         m2_res_obj.reset()
+        # print(self.model.map_features)
+        # print(self.model.wiring_mode)
         print('Resolution reset done\n')
 
     def on_epoch_end(self, epoch, logs=None):

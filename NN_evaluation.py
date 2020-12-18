@@ -76,8 +76,8 @@ if(_mode=="dm" or _mode =="p4_dm"):
       accuracy = accuracy_calc(conf_dm_mat_old, filename_plots = _filename_plots, old = True)
 
       ### Normalized confusion matrices - columns normalized:
-      # accuracy = accuracy_calc(conf_dm_mat, filename_plots = _filename_plots, old = False, normalization_line = False) # Accuracy calculation of main decay modes (truth vs. predicted)
-      # accuracy = accuracy_calc(conf_dm_mat_old, filename_plots = _filename_plots, old = True, normalization_line = False)
+      accuracy = accuracy_calc(conf_dm_mat, filename_plots = _filename_plots, old = False, normalization_line = False) # Accuracy calculation of main decay modes (truth vs. predicted)
+      accuracy = accuracy_calc(conf_dm_mat_old, filename_plots = _filename_plots, old = True, normalization_line = False)
 
 elif(_mode=="p4"):
       evaluation(mode = _mode, filename = _filename, epoch_number= _epoch_number) #creates the resolution plots

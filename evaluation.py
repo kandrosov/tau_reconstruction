@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pp
 import seaborn as sns
 import os
+import matplotlib as mpl
+mpl.use('Agg')
 
 from mymodel import *
 from plotting import plot_res
@@ -38,10 +40,10 @@ def evaluation(mode, filename, epoch_number):
     elif(mode=="p4_dm"):
         custom_objects = {
             "CustomMSE": CustomMSE,
-            "my_cat_dm" : my_cat_dm,
-            # "my_acc" : my_acc,
-            # "my_mse_ch"   : my_mse_ch,
-            # "my_mse_neu"  : my_mse_neu,
+            # "my_cat_dm" : my_cat_dm,
+            "my_acc" : my_acc,
+            "my_mse_ch"   : my_mse_ch,
+            "my_mse_neu"  : my_mse_neu,
             "my_mse_pt"   : my_mse_pt,
             "my_mse_mass" : my_mse_mass,
             "pt_res" : pt_res,
@@ -80,6 +82,17 @@ def evaluation(mode, filename, epoch_number):
 
             y_true = y
 
+            ### pt_res_rel in function of pt-true:
+            if y_true_tot is None:
+                y_true_tot = y_true[:,2]
+                delta_pt_tot = (y_pred[:,2]-y_true[:,2])/y_true[:,2]
+                def_delta_pt_tot = (z[:,1]-y_true[:,2])/y_true[:,2]
+            else:
+                y_true_tot = tf.concat([y_true_tot,y_true[:,2]], axis = 0)
+                delta_pt_tot = tf.concat([delta_pt_tot,(y_pred[:,2]-y_true[:,2])/y_true[:,2]], axis = 0)
+                def_delta_pt_tot = tf.concat([def_delta_pt_tot,(z[:,1]-y_true[:,2])/y_true[:,2]], axis = 0)
+            ### end pt_res_rel in function of pt_true
+
             h_pt_tot.Fill((y_pred[l,2]-y_true[l,2])/y_true[l,2])
             def_h_pt_tot.Fill((z[l,1]-y_true[l,2])/y_true[l,2])
 
@@ -93,6 +106,45 @@ def evaluation(mode, filename, epoch_number):
             if count_steps >= n_steps_test: break
         
         ##################################################################################
+        ### pt_res_rel in function of pt-true:
+        q = np.arange(0,100.1,0.1)
+        indices = tf.where(tf.logical_and(y_true_tot >= 20, y_true_tot < (20+5))) 
+        res_array = tf.gather(delta_pt_tot,indices, axis = 0)
+        quantile_array = tpf.stats.percentile(res_array,q, interpolation='linear')
+        def_res_array = tf.gather(def_delta_pt_tot,indices, axis = 0)
+        def_quantile_array = tpf.stats.percentile(def_res_array,q, interpolation='linear')
+
+        diff_array_0 = tf.math.abs(quantile_array[680]-quantile_array[0])
+        i_0 = tf.constant(1)
+        c = lambda i, diff_array: i < len(quantile_array)-680
+        b = lambda i, diff_array: (i+1, myconcat(diff_array, tf.math.abs(quantile_array[i+680]-quantile_array[i]),i))
+        r = tf.while_loop(c, b, [i_0, diff_array_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None, ])])
+        diff_array = r[1]
+
+        pt_res_true_0 = tf.math.reduce_min(diff_array)
+        i_0 = tf.constant(25.0)
+        j_0 = tf.constant(1)
+        c = lambda i, p, j: i < 100
+        b = lambda i, p, j: (i+5, mytruept(y_true_tot,delta_pt_tot,p,i,j),j+1)
+        r = tf.while_loop(c, b, [i_0, pt_res_true_0, j_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None,]), j_0.get_shape()])
+        pt_res_true_tot = r[1]
+
+        diff_array_0 = tf.math.abs(def_quantile_array[680]-def_quantile_array[0])
+        i_0 = tf.constant(1)
+        c = lambda i, diff_array: i < len(def_quantile_array)-680
+        b = lambda i, diff_array: (i+1, myconcat(diff_array, tf.math.abs(def_quantile_array[i+680]-def_quantile_array[i]),i))
+        r = tf.while_loop(c, b, [i_0, diff_array_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None, ])])
+        diff_array = r[1]
+
+        def_pt_res_true_0 = tf.math.reduce_min(diff_array)
+        i_0 = tf.constant(25.0)
+        j_0 = tf.constant(1)
+        c = lambda i, p, j: i < 100
+        b = lambda i, p, j: (i+5, mytruept(y_true_tot,def_delta_pt_tot,p,i,j),j+1)
+        r = tf.while_loop(c, b, [i_0, def_pt_res_true_0, j_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None,]), j_0.get_shape()])
+        def_pt_res_true_tot = r[1]
+        ### end pt_res_rel in function of pt-true
+
         R.gROOT.SetBatch(True)
 
         c1 = R.TCanvas( 'c1', '', 200, 10, 700, 500)
@@ -105,6 +157,21 @@ def evaluation(mode, filename, epoch_number):
         c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf]'))
+
+        x = np.arange(22.5,102.5,5)
+        fig0, axes = plt.subplots(1, sharex=False, figsize=(12, 8))
+        axes.tick_params(axis='both', which='major', labelsize=14)
+        axes.plot(x, pt_res_true_tot, 'bo:', label='predicted')
+        axes.plot(x,def_pt_res_true_tot,'ro:', label='default')
+        plt.xlabel('pt true [GeV]', fontsize=16)
+        plt.ylabel('relative pt resolution', fontsize=16)
+        axes.legend(fontsize=16)
+
+        pdf0 = pp.PdfPages(os.path.join(filename_plots,"pt_res_true.pdf"))
+        pdf0.savefig(fig0)
+        pdf0.close()
+        plt.close()
+
 
     elif(mode=="dm"):
         conf_dm_mat = None
@@ -171,9 +238,16 @@ def evaluation(mode, filename, epoch_number):
         def_delta_pt = None
         ### end quantile part
 
+        ### pt-res in function of pt_true part:
+        y_true_tot = None
+        delta_pt_tot = None
+        def_delta_pt_tot = None
+        ### end of pt-res in function of pt_true part
+
         print('\nStart generator loop to predict:\n')
 
         for x,y,z in generator_xyz(): # y is a (n_tau,n_labels) array
+            # print('Test set at the:',count_steps,'th event')
             y_pred = model.predict(x) 
             yy     = np.concatenate((y, y_pred), axis = 1) # yy = (y_true_charged, y_true_neutral, y_pred_charged, y_pred_neutral)
 
@@ -182,24 +256,24 @@ def evaluation(mode, filename, epoch_number):
             y_pred_r = np.round(y_pred,0)
 
             ### Decay mode comparison to new reconstruction:
-            # h_dm = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], (y_pred_r[:,0]-1)*5 + y_pred_r[:,1], dm_bins)
+            h_dm = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], (y_pred_r[:,0]-1)*5 + y_pred_r[:,1], dm_bins)
             
             ##### dm 6 outputs part:
-            dm = tf.constant([0,1,2,10,11,5])
-            y_shape= tf.shape(y_pred_r)
-            dm_mode = None
-            for i in range(y_shape[0]):
-                indice = tf.math.argmax(y_pred_r[i,:6])
-                if dm_mode is None:
-                    dm_mode = dm[indice]
-                else:
-                    a = tf.reshape(dm[indice],(1,))
-                    # print('a: ',a)
-                    dm_mode = tf.reshape(dm_mode,(i,))
-                    # print('dm_mode: ',dm_mode)
-                    dm_mode = tf.concat((dm_mode,a), axis = 0)
+            # dm = tf.constant([0,1,2,10,11,5])
+            # y_shape= tf.shape(y_pred_r)
+            # dm_mode = None
+            # for i in range(y_shape[0]):
+            #     indice = tf.math.argmax(y_pred_r[i,:6])
+            #     if dm_mode is None:
+            #         dm_mode = dm[indice]
+            #     else:
+            #         a = tf.reshape(dm[indice],(1,))
+            #         # print('a: ',a)
+            #         dm_mode = tf.reshape(dm_mode,(i,))
+            #         # print('dm_mode: ',dm_mode)
+            #         dm_mode = tf.concat((dm_mode,a), axis = 0)
             
-            h_dm = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], dm_mode, dm_bins)
+            # h_dm = decay_mode_histo((y_r[:,0]-1)*5 + y_r[:,1], dm_mode, dm_bins)
             #### end of dm 6 output part
 
             ### Decay mode comparison to old reconstruction:
@@ -212,6 +286,19 @@ def evaluation(mode, filename, epoch_number):
             true_dm = (y_true[:,0]  -1)*5 + y_true[:,1]
             pred_dm = (y_pred_r[:,0]-1)*5 + y_pred_r[:,1]
             def_dm  = z[:,0]
+
+
+            ### pt_res_rel in function of pt-true:
+            if y_true_tot is None:
+                y_true_tot = y_true[:,2]
+                delta_pt_tot = (y_pred[:,2]-y_true[:,2])/y_true[:,2]
+                def_delta_pt_tot = (z[:,1]-y_true[:,2])/y_true[:,2]
+            else:
+                y_true_tot = tf.concat([y_true_tot,y_true[:,2]], axis = 0)
+                delta_pt_tot = tf.concat([delta_pt_tot,(y_pred[:,2]-y_true[:,2])/y_true[:,2]], axis = 0)
+                def_delta_pt_tot = tf.concat([def_delta_pt_tot,(z[:,1]-y_true[:,2])/y_true[:,2]], axis = 0)
+            ### end pt_res_rel in function of pt_true
+
 
             ### Quantile part:
             if delta_pt is None:
@@ -279,43 +366,56 @@ def evaluation(mode, filename, epoch_number):
             count_steps += 1
             if count_steps % 100 == 0: print('Test set at the:',count_steps,'th event')
             if count_steps >= n_steps_test: break
+        ################### end of generator loop ##########################
+
 
         ### Quantile part:
         q = np.arange(0,101,1)
-        # q = np.arange(0,100,0.1)
-        # print(q)# da 0 a 100 inclusi
-        # print(len(q)) # = 101
-        quantile_array = None
-        def_quantile_array = None
-        counter = 0
-        for i in q:
-            # print('************ ',i,' ***********')
-            if quantile_array is None:
-                quantile_array = tpf.stats.percentile(delta_pt,i, interpolation='linear')
-                def_quantile_array = tpf.stats.percentile(def_delta_pt,i, interpolation='linear')
-            else:
-                b = quantile_array
-                b = tf.reshape(b,(counter,))
-                a = tpf.stats.percentile(delta_pt,i, interpolation='linear')
-                # print(counter)
-                a = tf.reshape(a,(1,))
-                # print('a: ',a)
-                quantile_array = tf.concat([b,a], axis = 0)
-                # print('quantile_array: ',quantile_array)
 
-                b = def_quantile_array
-                b = tf.reshape(b,(counter,))
-                a = tpf.stats.percentile(def_delta_pt,i, interpolation='linear')
-                a = tf.reshape(a,(1,))
-                # print('a: ',a)
-                def_quantile_array = tf.concat([b,a], axis = 0)
-                # print('def_quantile_array: ',def_quantile_array)
-            counter += 1
-
+        quantile_array = tpf.stats.percentile(delta_pt,q, interpolation='linear')
+        def_quantile_array = tpf.stats.percentile(def_delta_pt,q, interpolation='linear')
 
         np.savetxt('quantile_evaluation.csv', [quantile_array,def_quantile_array], delimiter=',')
         ### end quantile part
 
+        ### pt_res_rel in function of pt-true:
+        q = np.arange(0,100.1,0.1)
+        indices = tf.where(tf.logical_and(y_true_tot >= 20, y_true_tot < (20+5))) 
+        res_array = tf.gather(delta_pt_tot,indices, axis = 0)
+        quantile_array = tpf.stats.percentile(res_array,q, interpolation='linear')
+        def_res_array = tf.gather(def_delta_pt_tot,indices, axis = 0)
+        def_quantile_array = tpf.stats.percentile(def_res_array,q, interpolation='linear')
+
+        diff_array_0 = tf.math.abs(quantile_array[680]-quantile_array[0])
+        i_0 = tf.constant(1)
+        c = lambda i, diff_array: i < len(quantile_array)-680
+        b = lambda i, diff_array: (i+1, myconcat(diff_array, tf.math.abs(quantile_array[i+680]-quantile_array[i]),i))
+        r = tf.while_loop(c, b, [i_0, diff_array_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None, ])])
+        diff_array = r[1]
+
+        pt_res_true_0 = tf.math.reduce_min(diff_array)
+        i_0 = tf.constant(25.0)
+        j_0 = tf.constant(1)
+        c = lambda i, p, j: i < 100
+        b = lambda i, p, j: (i+5, mytruept(y_true_tot,delta_pt_tot,p,i,j),j+1)
+        r = tf.while_loop(c, b, [i_0, pt_res_true_0, j_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None,]), j_0.get_shape()])
+        pt_res_true_tot = r[1]
+
+        diff_array_0 = tf.math.abs(def_quantile_array[680]-def_quantile_array[0])
+        i_0 = tf.constant(1)
+        c = lambda i, diff_array: i < len(def_quantile_array)-680
+        b = lambda i, diff_array: (i+1, myconcat(diff_array, tf.math.abs(def_quantile_array[i+680]-def_quantile_array[i]),i))
+        r = tf.while_loop(c, b, [i_0, diff_array_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None, ])])
+        diff_array = r[1]
+
+        def_pt_res_true_0 = tf.math.reduce_min(diff_array)
+        i_0 = tf.constant(25.0)
+        j_0 = tf.constant(1)
+        c = lambda i, p, j: i < 100
+        b = lambda i, p, j: (i+5, mytruept(y_true_tot,def_delta_pt_tot,p,i,j),j+1)
+        r = tf.while_loop(c, b, [i_0, def_pt_res_true_0, j_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None,]), j_0.get_shape()])
+        def_pt_res_true_tot = r[1]
+        ### end pt_res_rel in function of pt-true
 
         ##################################################################################
         R.gROOT.SetBatch(True)
@@ -330,40 +430,108 @@ def evaluation(mode, filename, epoch_number):
         c1 = R.TCanvas( 'c1', '', 200, 10, 700, 500)
         legend1 = plot_res(h_pt_tot, def_h_pt_tot, "Relative difference for pt")
         legend1.Draw("SAMES")
-        # c2 = R.TCanvas( 'c2', '', 200, 10, 700, 500)
-        # legend2 = plot_res(h_eta_tot, def_h_eta_tot, "Absolute difference for eta")
-        # legend2.Draw("SAMES")
-        # c3 = R.TCanvas( 'c3', '', 200, 10, 700, 500)
-        # legend3 = plot_res(h_phi_tot, def_h_phi_tot, "Absolute difference for phi")
-        # legend3.Draw("SAMES")
+        c2 = R.TCanvas( 'c2', '', 200, 10, 700, 500)
+        legend2 = plot_res(h_m2_pi_tot, def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]")
+        legend2.Draw("SAMES")
+        c3 = R.TCanvas( 'c3', '', 200, 10, 700, 500)
+        legend3 = plot_res(h_m2_pi_0_tot, def_h_m2_pi_0_tot, "Absolute difference for mass for (\pi\pm + n \pi0) [GeV]")
+        legend3.Draw("SAMES")
         c4 = R.TCanvas( 'c4', '', 200, 10, 700, 500)
-        legend4 = plot_res(h_m2_pi_tot, def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]")
+        legend4 = plot_res(h_m2_3pi_tot, def_h_m2_3pi_tot, "Absolute difference for mass for (3\pi\pm + n \pi0) [GeV]")
         legend4.Draw("SAMES")
         c5 = R.TCanvas( 'c5', '', 200, 10, 700, 500)
-        legend5 = plot_res(h_m2_pi_0_tot, def_h_m2_pi_0_tot, "Absolute difference for mass for (\pi\pm + n \pi0) [GeV]")
+        legend5 = plot_res(c_h_m2_pi_tot, c_def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]", True)
         legend5.Draw("SAMES")
         c6 = R.TCanvas( 'c6', '', 200, 10, 700, 500)
-        legend6 = plot_res(h_m2_3pi_tot, def_h_m2_3pi_tot, "Absolute difference for mass for (3\pi\pm + n \pi0) [GeV]")
+        legend6 = plot_res(c_h_m2_pi_0_tot, c_def_h_m2_pi_0_tot, "Absolute difference for mass for (\pi\pm + n \pi0) [GeV]", True)
         legend6.Draw("SAMES")
         c7 = R.TCanvas( 'c7', '', 200, 10, 700, 500)
-        legend7 = plot_res(c_h_m2_pi_tot, c_def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]", True)
+        legend7 = plot_res(c_h_m2_3pi_tot, c_def_h_m2_3pi_tot, "Absolute difference for mass for (3\pi\pm + n \pi0) [GeV]", True)
         legend7.Draw("SAMES")
-        c8 = R.TCanvas( 'c8', '', 200, 10, 700, 500)
-        legend8 = plot_res(c_h_m2_pi_0_tot, c_def_h_m2_pi_0_tot, "Absolute difference for mass for (\pi\pm + n \pi0) [GeV]", True)
-        legend8.Draw("SAMES")
-        c9 = R.TCanvas( 'c9', '', 200, 10, 700, 500)
-        legend9 = plot_res(c_h_m2_3pi_tot, c_def_h_m2_3pi_tot, "Absolute difference for mass for (3\pi\pm + n \pi0) [GeV]", True)
-        legend9.Draw("SAMES")
+
+        c11 = R.TCanvas( 'c11', '', 200, 10, 700, 500)
+        legend11 = plot_res(h_pt_tot, def_h_pt_tot, "Relative difference for pt", c_dm = False, logy = True)
+        legend11.Draw("SAMES")
+        c22 = R.TCanvas( 'c22', '', 200, 10, 700, 500)
+        legend22 = plot_res(h_m2_pi_tot, def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]", c_dm = False, logy = True)
+        legend22.Draw("SAMES")
+        c33 = R.TCanvas( 'c33', '', 200, 10, 700, 500)
+        legend33 = plot_res(h_m2_pi_0_tot, def_h_m2_pi_0_tot, "Absolute difference for mass for (\pi\pm + n \pi0) [GeV]", c_dm = False, logy = True)
+        legend33.Draw("SAMES")
+        c44 = R.TCanvas( 'c44', '', 200, 10, 700, 500)
+        legend44 = plot_res(h_m2_3pi_tot, def_h_m2_3pi_tot, "Absolute difference for mass for (3\pi\pm + n \pi0) [GeV]", c_dm = False, logy = True)
+        legend44.Draw("SAMES")
+        c55 = R.TCanvas( 'c55', '', 200, 10, 700, 500)
+        legend55 = plot_res(c_h_m2_pi_tot, c_def_h_m2_pi_tot, "Absolute difference for mass for (\pi\pm) [GeV]", c_dm = True, logy = True)
+        legend55.Draw("SAMES")
+        c66 = R.TCanvas( 'c66', '', 200, 10, 700, 500)
+        legend66 = plot_res(c_h_m2_pi_0_tot, c_def_h_m2_pi_0_tot, "Absolute difference for mass for (\pi\pm + n \pi0) [GeV]", c_dm = True, logy = True)
+        legend66.Draw("SAMES")
+        c77 = R.TCanvas( 'c77', '', 200, 10, 700, 500)
+        legend77 = plot_res(c_h_m2_3pi_tot, c_def_h_m2_3pi_tot, "Absolute difference for mass for (3\pi\pm + n \pi0) [GeV]", c_dm = True, logy = True)
+        legend77.Draw("SAMES")
+
         c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf['))
         c1.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
-        # c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
-        # c3.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c2.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c3.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c4.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c5.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c6.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
         c7.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
-        c8.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
-        c9.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
-        c9.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf]'))
+        c11.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c22.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c33.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c44.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c55.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c66.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c77.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf'))
+        c77.SaveAs(os.path.join(filename_plots,'h_p4_resolution.pdf]'))
+
+        x = np.arange(22.5,102.5,5)
+        fig0, axes = plt.subplots(1, sharex=False, figsize=(12, 8))
+        axes.tick_params(axis='both', which='major', labelsize=14)
+        axes.plot(x, pt_res_true_tot, 'bo:', label='predicted')
+        axes.plot(x,def_pt_res_true_tot,'ro:', label='default')
+        plt.xlabel('pt true [GeV]', fontsize=16)
+        plt.ylabel('relative pt resolution', fontsize=16)
+        axes.legend(fontsize=16)
+
+        pdf0 = pp.PdfPages(os.path.join(filename_plots,"pt_res_true.pdf"))
+        pdf0.savefig(fig0)
+        pdf0.close()
+        plt.close()
         
         return conf_dm_mat, conf_dm_mat_old
+
+
+
+def myconcat(a,b,i):
+    a = tf.reshape(a,(i,))
+    b = tf.reshape(b,(1,))
+    a = tf.concat([a, b], axis = 0)
+    return a
+
+def mytruept(y_true_tot, delta_pt_tot, pt_res_true, i, j):
+    indices = tf.where(tf.logical_and(y_true_tot >= i, y_true_tot < (i+5))) 
+    res_array = tf.gather(delta_pt_tot,indices, axis = 0) # array of res_pt_rel in this pt_true interval
+
+    ### Build quantiles in 0.1:
+    counter = 0
+    diff_array = None
+    q = np.arange(0,100.1,0.1)
+    quantile_array = tpf.stats.percentile(res_array,q, interpolation='linear')
+
+    diff_array_0 = tf.math.abs(quantile_array[680]-quantile_array[0])
+    i_0 = tf.constant(1)
+    c = lambda i, diff_array: i < len(quantile_array)-680
+    b = lambda i, diff_array: (i+1, myconcat(diff_array, tf.math.abs(quantile_array[i+680]-quantile_array[i]),i))
+    r = tf.while_loop(c, b, [i_0, diff_array_0], shape_invariants=[i_0.get_shape(), tf.TensorShape([None, ])])
+    diff_array = r[1]
+
+    a = tf.math.reduce_min(diff_array)
+    a = tf.reshape(a,(1,))
+    b = pt_res_true
+    b = tf.reshape(b,(j,))
+    pt_res_true = tf.concat([b,a], axis = 0)
+    return pt_res_true

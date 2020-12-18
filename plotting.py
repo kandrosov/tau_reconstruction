@@ -125,7 +125,7 @@ def accuracy_calc(conf_dm_mat, filename_plots, old = False, normalization_line =
         conf_dm_mat_norm = conf_dm_mat
         for i in range(0,len(conf_dm_mat_norm[0,:])):
             summy = 0
-            summy = conf_dm_mat_norm.sum() # sum of column => normalize columns
+            summy = conf_dm_mat_norm[:,i].sum() # sum of column => normalize columns
             if (summy != 0):
                 conf_dm_mat_norm[:,i] = conf_dm_mat_norm[:,i]/summy
 
@@ -170,7 +170,7 @@ def accuracy_calc(conf_dm_mat, filename_plots, old = False, normalization_line =
     return accuracy_value
 
 
-def plot_res(h, def_h, xlabelname, c_dm = False):
+def plot_res(h, def_h, xlabelname, c_dm = False, logy = False):
     def_h.SetXTitle(xlabelname)
     R.gStyle.SetOptStat('rme')
     if(c_dm == True):
@@ -182,6 +182,8 @@ def plot_res(h, def_h, xlabelname, c_dm = False):
 
     def_h.Draw("h")
     h.Draw("h sames")
+    if(logy==True):
+        R.gPad.SetLogy()
     R.gPad.Update()
 
     st = h.FindObject("stats")

@@ -72,6 +72,63 @@ import matplotlib.backends.backend_pdf as pp
 # plt.close()
 
 
+# #####################################################################################
+# with open('quantile_evaluation.csv', newline='') as f:
+#     quantiles_list = list(csv.reader(f))
+
+# quantiles = np.array(quantiles_list)
+# print(quantiles.shape)
+
+# quantiles = quantiles.astype(np.float)
+# # find_center = np.argmin(np.abs(quantiles+0.05433), axis=1)
+
+# a = np.zeros((2,int((len(quantiles[0])-2)/2)+1))
+# ### Find the maximum:
+# # print('test: ',np.arange(0,len(quantiles[0])-2,2))
+# counter = 0
+# for i in np.arange(0,len(quantiles[0])-2,2):
+#     # print(counter)
+#     # print(i)
+#     a[:,counter] = quantiles[:,i+2]-quantiles[:,i]
+#     counter+=1
+# # print('counter: ',counter)
+# # print(a)
+# find_center = np.argmin(np.abs(a), axis=1)
+# print(find_center) # [5,5] => 1.1 for both => indices 11,11
+
+# find_center = find_center*2+1
+# print(find_center)
+
+# xaxis = np.arange(1,31,1)
+# diff_q = np.zeros(len(xaxis))
+# def_diff_q = np.zeros(len(xaxis))
+# for i in xaxis:
+#     diff_q[i-1] = np.abs(quantiles[0,find_center[0]+i] - quantiles[0,find_center[0]-i])
+#     def_diff_q[i-1] = np.abs(quantiles[1,find_center[1]+i] - quantiles[1,find_center[1]-i])
+#     if(i==14):
+#         print(quantiles[0,find_center[0]+i])
+#         print(quantiles[0,find_center[0]-i])
+#         print(quantiles[1,find_center[1]+i])
+#         print(quantiles[1,find_center[1]-i])
+
+
+# fig0, axes = plt.subplots(1, sharex=False, figsize=(12, 8))
+# fig0.suptitle('Quantiles')
+# plt.ylabel("Quanitile absolute difference", fontsize=14)
+# plt.xlabel("Quantile interval around maximum in %", fontsize=14)
+# plt.xticks(xaxis*2)
+# plt.grid(True)
+# plt.plot(xaxis*2, diff_q     , 'bo--', label="predicted")
+# plt.plot(xaxis*2, def_diff_q , 'ro--', label="default")
+# plt.legend()
+
+# pdf0 = pp.PdfPages("../Plots/Quantiles.pdf")
+# pdf0.savefig(fig0)
+# pdf0.close()
+# plt.close()
+
+
+
 #####################################################################################
 with open('quantile_evaluation.csv', newline='') as f:
     quantiles_list = list(csv.reader(f))
@@ -82,47 +139,22 @@ print(quantiles.shape)
 quantiles = quantiles.astype(np.float)
 # find_center = np.argmin(np.abs(quantiles+0.05433), axis=1)
 
-a = np.zeros((2,int((len(quantiles[0])-2)/2)+1))
+a = np.zeros((2,int(len(quantiles[0])-68)))
 ### Find the maximum:
 # print('test: ',np.arange(0,len(quantiles[0])-2,2))
 counter = 0
-for i in np.arange(0,len(quantiles[0])-2,2):
+for i in np.arange(0,len(quantiles[0])-68,1):
     # print(counter)
     # print(i)
-    a[:,counter] = quantiles[:,i+2]-quantiles[:,i]
+    a[:,counter] = quantiles[:,i+68]-quantiles[:,i]
     counter+=1
-# print('counter: ',counter)
+print('counter: ',counter)
 # print(a)
 find_center = np.argmin(np.abs(a), axis=1)
 print(find_center) # [5,5] => 1.1 for both => indices 11,11
 
-find_center = find_center*2+1
-print(find_center)
-
-xaxis = np.arange(1,31,1)
-diff_q = np.zeros(len(xaxis))
-def_diff_q = np.zeros(len(xaxis))
-for i in xaxis:
-    diff_q[i-1] = np.abs(quantiles[0,find_center[0]+i] - quantiles[0,find_center[0]-i])
-    def_diff_q[i-1] = np.abs(quantiles[1,find_center[1]+i] - quantiles[1,find_center[1]-i])
-    if(i==14):
-        print(quantiles[0,find_center[0]+i])
-        print(quantiles[0,find_center[0]-i])
-        print(quantiles[1,find_center[1]+i])
-        print(quantiles[1,find_center[1]-i])
-
-
-fig0, axes = plt.subplots(1, sharex=False, figsize=(12, 8))
-fig0.suptitle('Quantiles')
-plt.ylabel("Quanitile absolute difference", fontsize=14)
-plt.xlabel("Quantile interval around maximum in %", fontsize=14)
-plt.xticks(xaxis*2)
-plt.grid(True)
-plt.plot(xaxis*2, diff_q     , 'bo--', label="predicted")
-plt.plot(xaxis*2, def_diff_q , 'ro--', label="default")
-plt.legend()
-
-pdf0 = pp.PdfPages("../Plots/Quantiles.pdf")
-pdf0.savefig(fig0)
-pdf0.close()
-plt.close()
+print(a.shape)
+print(a[0][find_center[0]-1],' ',a[0][find_center[0]],' ',a[0][find_center[0]+1])
+print(a[1][find_center[1]-1],' ',a[1][find_center[1]],' ',a[1][find_center[1]+1])
+# 0.1945222243666649 # pred
+# 0.2065688967704773 # def
